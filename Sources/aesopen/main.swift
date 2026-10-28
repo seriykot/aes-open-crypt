@@ -257,7 +257,7 @@ private func exitCode(for error: Error) -> Int32 {
         return 3
     case .unsupportedVersion:
         return 4
-    case .outputExists, .io:
+    case .outputExists, .sameFile, .io:
         return 5
     case .cancelled:
         return 130

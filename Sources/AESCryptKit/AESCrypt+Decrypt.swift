@@ -25,6 +25,8 @@ extension AESCrypt {
         progress: AESCryptProgressHandler? = nil,
         isCancelled: () -> Bool = { false }
     ) throws {
+        try FileSafety.ensureDistinct(input: url, output: outputURL)
+
         let info = try inspect(url: url)
         let input: FileHandle
         do {
@@ -94,23 +96,9 @@ extension AESCrypt {
             storedPayloadMAC = trailer
         }
 
-        let tempURL = outputURL.deletingLastPathComponent()
-            .appendingPathComponent(".aesopen-\(UUID().uuidString).tmp")
-        guard FileManager.default.createFile(
-            atPath: tempURL.path,
-            contents: nil,
-            attributes: [.posixPermissions: 0o600]
-        ) else {
-            throw AESCryptError.io("could not create a temporary file next to \(outputURL.path)")
-        }
-
-        let writer: FileHandle
-        do {
-            writer = try FileHandle(forWritingTo: tempURL)
-        } catch {
-            try? FileManager.default.removeItem(at: tempURL)
-            throw AESCryptError.io(error.localizedDescription)
-        }
+        let temporary = try TemporaryFile.create(nextTo: outputURL)
+        let tempURL = temporary.url
+        let writer = temporary.handle
 
         var moved = false
         defer {

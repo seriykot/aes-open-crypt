@@ -92,6 +92,11 @@ this implementation and decrypts the result with AES Crypt 3.14 itself.
   password-derived key. The header and payload each carry an HMAC-SHA256.
 - Temporary files are created with mode `0600` next to the destination.
   Decrypted files stay `0600`; encrypted files are `0644`.
+- Input files are opened read-only and are never written to. The engine
+  refuses to run when the output resolves to the same file as the input,
+  including symlinks and hard links. Tests snapshot the input bytes, inode,
+  permissions, timestamps, flags and extended attributes before and after
+  encryption, decryption, wrong passwords, tampering and cancellation.
 - The app is not sandboxed and does not use the network.
 
 ## Layout

@@ -8,6 +8,7 @@ public enum AESCryptError: Error, Equatable {
     case wrongPassword
     case authenticationFailed
     case outputExists(String)
+    case sameFile
     case cancelled
     case io(String)
 }
@@ -29,6 +30,8 @@ extension AESCryptError: LocalizedError {
             return "The file failed its integrity check. It may have been modified or corrupted."
         case .outputExists(let path):
             return "An output file already exists at \(path)."
+        case .sameFile:
+            return "The input and output are the same file. Choose a different output name."
         case .cancelled:
             return "Cancelled."
         case .io(let detail):
