@@ -5,3 +5,5 @@
 Tests/Fixtures/private/
 *.xcuserstate
 xcuserdata/
+App/AppIcon.iconset/
+dist/

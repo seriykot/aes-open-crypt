@@ -7,10 +7,12 @@ let package = Package(
     products: [
         .library(name: "AESCryptKit", targets: ["AESCryptKit"]),
         .executable(name: "aesopen", targets: ["aesopen"]),
+        .executable(name: "AESOpenCrypt", targets: ["AESOpenCrypt"]),
     ],
     targets: [
         .target(name: "AESCryptKit"),
         .executableTarget(name: "aesopen", dependencies: ["AESCryptKit"]),
+        .executableTarget(name: "AESOpenCrypt", dependencies: ["AESCryptKit"]),
         .testTarget(
             name: "AESCryptKitTests",
             dependencies: ["AESCryptKit"],
