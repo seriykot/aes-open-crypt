@@ -1,4 +1,3 @@
-import CryptoKit
 import Foundation
 import XCTest
 @testable import AESCryptKit
@@ -286,8 +285,8 @@ final class BatchTests: XCTestCase {
             to: encryptedInput
         )
 
-        let plainBefore = try inputStamp(plain)
-        let encryptedBefore = try inputStamp(encryptedInput)
+        let plainBefore = try snapshot(plain)
+        let encryptedBefore = try snapshot(encryptedInput)
 
         let plan = try AESCryptBatch.plan(urls: [plain, encryptedInput])
         let results = AESCryptBatch.run(plan: plan, password: "apples")
@@ -295,8 +294,53 @@ final class BatchTests: XCTestCase {
         XCTAssertEqual(results.count, 2)
         XCTAssertNil(results[0].failure)
         XCTAssertNil(results[1].failure)
-        XCTAssertEqual(try inputStamp(plain), plainBefore)
-        XCTAssertEqual(try inputStamp(encryptedInput), encryptedBefore)
+        XCTAssertEqual(try snapshot(plain), plainBefore)
+        XCTAssertEqual(try snapshot(encryptedInput), encryptedBefore)
+    }
+
+    func testBatchLeavesAllInputsUnchanged() throws {
+        let directory = try makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let source = directory.appendingPathComponent("source")
+        try FileManager.default.createDirectory(at: source, withIntermediateDirectories: true)
+
+        var encryptedInputs: [URL] = []
+        var plainInputs: [URL] = []
+        for index in 0..<5 {
+            let plaintext = source.appendingPathComponent("secret-\(index).txt")
+            try Data("secret number \(index)\n".utf8).write(to: plaintext)
+            let encrypted = directory.appendingPathComponent("secret-\(index).aes")
+            try AESCrypt.encrypt(url: plaintext, to: encrypted, password: "apples")
+            encryptedInputs.append(encrypted)
+
+            let plain = directory.appendingPathComponent("plain-\(index).txt")
+            try Data("plain number \(index)\n".utf8).write(to: plain)
+            plainInputs.append(plain)
+        }
+        try FileManager.default.removeItem(at: source)
+
+        let inputs = encryptedInputs + plainInputs
+        XCTAssertEqual(inputs.count, 10)
+        let before = try Dictionary(uniqueKeysWithValues: inputs.map { ($0, try snapshot($0)) })
+
+        let decryptPlan = try AESCryptBatch.plan(urls: encryptedInputs)
+        let decryptResults = AESCryptBatch.run(plan: decryptPlan, password: "apples")
+        XCTAssertEqual(decryptResults.count, 5)
+        XCTAssertTrue(decryptResults.allSatisfy { $0.failure == nil })
+
+        let encryptPlan = try AESCryptBatch.plan(urls: plainInputs)
+        let encryptResults = AESCryptBatch.run(plan: encryptPlan, password: "apples")
+        XCTAssertEqual(encryptResults.count, 5)
+        XCTAssertTrue(encryptResults.allSatisfy { $0.failure == nil })
+
+        for input in inputs {
+            XCTAssertEqual(try snapshot(input), before[input], "input changed: \(input.path)")
+        }
+
+        let leftovers = try FileManager.default.contentsOfDirectory(atPath: directory.path)
+            .filter { $0.hasPrefix(".aesopen-") }
+        XCTAssertEqual(leftovers, [], "temporary files were left behind")
     }
 
     private func makeDirectory() throws -> URL {
@@ -305,31 +349,4 @@ final class BatchTests: XCTestCase {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         return directory
     }
-}
-
-private struct InputStamp: Equatable {
-    let digest: String
-    let size: Int64
-    let permissions: UInt16
-    let fileNumber: UInt64
-    let modificationDate: Date
-    let creationDate: Date
-}
-
-private func inputStamp(_ url: URL) throws -> InputStamp {
-    let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
-    let contents = try Data(contentsOf: url)
-
-    func number(_ key: FileAttributeKey) -> NSNumber? {
-        attributes[key] as? NSNumber
-    }
-
-    return InputStamp(
-        digest: SHA256.hash(data: contents).map { String(format: "%02x", $0) }.joined(),
-        size: number(.size)?.int64Value ?? -1,
-        permissions: number(.posixPermissions)?.uint16Value ?? 0,
-        fileNumber: number(.systemFileNumber)?.uint64Value ?? 0,
-        modificationDate: attributes[.modificationDate] as? Date ?? .distantPast,
-        creationDate: attributes[.creationDate] as? Date ?? .distantPast
-    )
 }
