@@ -78,6 +78,9 @@ The test suite decrypts all 84 official AES Crypt known-answer vectors (21
 each for formats 0 through 3), the official format 3 sample, and fixtures
 produced by the real AES Crypt 3.14 command line tool. It also encrypts with
 this implementation and decrypts the result with AES Crypt 3.14 itself.
+Manual cross-checks with AES Crypt 4.7.0 cover both directions: 4.7.0 reads
+this app's format 2 and 3 output, and this app reads 4.7.0's format 3
+output, including non-ASCII passwords and non-default KDF iteration counts.
 
 ## Security notes
 
