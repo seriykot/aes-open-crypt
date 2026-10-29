@@ -250,3 +250,112 @@ public enum AESCryptBatch {
         url.standardizedFileURL.path.lowercased()
     }
 }
+
+public enum AESCryptBatchFailure: Error, Equatable, Sendable {
+    case issue(AESCryptBatchIssue)
+    case crypto(AESCryptError)
+}
+
+public struct AESCryptBatchResult: Sendable {
+    public let item: AESCryptBatchItem
+    public let failure: AESCryptBatchFailure?
+
+    public init(item: AESCryptBatchItem, failure: AESCryptBatchFailure?) {
+        self.item = item
+        self.failure = failure
+    }
+}
+
+public struct AESCryptBatchProgress: Sendable {
+    public let itemIndex: Int
+    public let itemCount: Int
+    public let itemFraction: Double
+    public let overallFraction: Double
+
+    public init(itemIndex: Int, itemCount: Int, itemFraction: Double, overallFraction: Double) {
+        self.itemIndex = itemIndex
+        self.itemCount = itemCount
+        self.itemFraction = itemFraction
+        self.overallFraction = overallFraction
+    }
+}
+
+extension AESCryptBatch {
+    public static func run(
+        plan: AESCryptBatchPlan,
+        password: String,
+        format: AESFormatVersion = .v2,
+        iterations: UInt32 = 600_000,
+        progress: ((AESCryptBatchProgress) -> Void)? = nil,
+        isCancelled: @escaping () -> Bool = { false }
+    ) -> [AESCryptBatchResult] {
+        let items = plan.items
+        var results: [AESCryptBatchResult] = []
+        results.reserveCapacity(items.count)
+
+        for (index, item) in items.enumerated() {
+            if isCancelled() {
+                for remaining in items[index...] {
+                    results.append(
+                        AESCryptBatchResult(item: remaining, failure: .crypto(.cancelled))
+                    )
+                }
+                break
+            }
+
+            if let issue = item.issue {
+                results.append(AESCryptBatchResult(item: item, failure: .issue(issue)))
+                continue
+            }
+
+            let itemCount = items.count
+            let handler: AESCryptProgressHandler? = progress.map { report in
+                { itemProgress in
+                    report(
+                        AESCryptBatchProgress(
+                            itemIndex: index,
+                            itemCount: itemCount,
+                            itemFraction: itemProgress.fraction,
+                            overallFraction: (Double(index) + itemProgress.fraction) / Double(itemCount)
+                        )
+                    )
+                }
+            }
+
+            do {
+                switch item.mode {
+                case .encrypt:
+                    try AESCrypt.encrypt(
+                        url: item.input,
+                        to: item.output,
+                        password: password,
+                        format: format,
+                        iterations: iterations,
+                        progress: handler,
+                        isCancelled: isCancelled
+                    )
+                case .decrypt:
+                    try AESCrypt.decrypt(
+                        url: item.input,
+                        to: item.output,
+                        password: password,
+                        progress: handler,
+                        isCancelled: isCancelled
+                    )
+                }
+                results.append(AESCryptBatchResult(item: item, failure: nil))
+            } catch let error as AESCryptError {
+                results.append(AESCryptBatchResult(item: item, failure: .crypto(error)))
+            } catch {
+                results.append(
+                    AESCryptBatchResult(
+                        item: item,
+                        failure: .crypto(.io(error.localizedDescription))
+                    )
+                )
+            }
+        }
+
+        return results
+    }
+}

@@ -1,6 +1,6 @@
 import Foundation
 
-public enum AESCryptError: Error, Equatable {
+public enum AESCryptError: Error, Equatable, Sendable {
     case notAnAESFile
     case unsupportedVersion(UInt8)
     case truncated
