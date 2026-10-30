@@ -53,6 +53,7 @@ public final class BatchModel: ObservableObject {
     }
 
     private(set) var activeTask: Task<Void, Never>?
+    private(set) var runGeneration = 0
     private var cancellation: BatchCancellationFlag?
     private var isUpdatingMode = false
 
@@ -75,11 +76,25 @@ public final class BatchModel: ObservableObject {
         }
     }
 
-    public func add(urls: [URL], preferredMode: AESCryptBatchMode?) {
-        guard !urls.isEmpty else { return }
+    public func add(
+        urls: [URL],
+        preferredMode: AESCryptBatchMode?,
+        unreadableCount: Int = 0
+    ) {
+        guard !urls.isEmpty else {
+            if let message = Self.unreadableDropMessage(unreadableCount) {
+                notice = message
+            }
+            return
+        }
 
         if phase == .working {
-            notice = "Finish the current batch first."
+            let base = "Finish the current batch first."
+            if let message = Self.unreadableDropMessage(unreadableCount) {
+                notice = "\(base) \(message)"
+            } else {
+                notice = base
+            }
             return
         }
         if phase == .finished {
@@ -132,7 +147,7 @@ public final class BatchModel: ObservableObject {
             phase = .ready
             overallProgress = 0
             errorMessage = nil
-            notice = nil
+            notice = Self.unreadableDropMessage(unreadableCount)
         } catch {
             errorMessage = Self.message(for: error)
         }
@@ -155,6 +170,7 @@ public final class BatchModel: ObservableObject {
         activeTask?.cancel()
         cancellation = nil
         activeTask = nil
+        runGeneration += 1
         rows = []
         phase = .idle
         overallProgress = 0
@@ -254,6 +270,8 @@ public final class BatchModel: ObservableObject {
         self.password = ""
         self.confirmation = ""
 
+        runGeneration += 1
+        let generation = runGeneration
         let flag = BatchCancellationFlag()
         cancellation = flag
 
@@ -272,20 +290,25 @@ public final class BatchModel: ObservableObject {
                     lastIndex = update.itemIndex
                     lastOverall = update.overallFraction
                     Task { @MainActor [weak self] in
-                        self?.applyProgress(update, rowIDs: rowIDs)
+                        self?.applyProgress(update, rowIDs: rowIDs, generation: generation)
                     }
                 },
                 isCancelled: { flag.isCancelled }
             )
 
             await MainActor.run { [weak self] in
-                self?.applyResults(results, rowIDs: rowIDs)
+                self?.applyResults(results, rowIDs: rowIDs, generation: generation)
             }
         }
     }
 
-    private func applyProgress(_ update: AESCryptBatchProgress, rowIDs: [UUID]) {
-        guard phase == .working,
+    func applyProgress(
+        _ update: AESCryptBatchProgress,
+        rowIDs: [UUID],
+        generation: Int
+    ) {
+        guard generation == runGeneration,
+              phase == .working,
               update.itemIndex >= 0,
               update.itemIndex < rowIDs.count else { return }
 
@@ -301,7 +324,13 @@ public final class BatchModel: ObservableObject {
         }
     }
 
-    private func applyResults(_ results: [AESCryptBatchResult], rowIDs: [UUID]) {
+    func applyResults(
+        _ results: [AESCryptBatchResult],
+        rowIDs: [UUID],
+        generation: Int
+    ) {
+        guard generation == runGeneration else { return }
+
         for (offset, result) in results.enumerated() where offset < rowIDs.count {
             guard let index = rows.firstIndex(where: { $0.id == rowIDs[offset] }) else {
                 continue
@@ -359,6 +388,10 @@ public final class BatchModel: ObservableObject {
         }
         let modes = Set(plan.items.map(\.mode))
         hasMixedInputs = modes.contains(.encrypt) && modes.contains(.decrypt)
+    }
+
+    private static func unreadableDropMessage(_ count: Int) -> String? {
+        count > 0 ? "Could not read \(count) of the dropped files." : nil
     }
 
     private static func message(for error: Error) -> String {

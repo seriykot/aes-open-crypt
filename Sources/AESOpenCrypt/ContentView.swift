@@ -485,7 +485,11 @@ struct ContentView: View {
             lock.lock()
             let urls = loaded.keys.sorted().compactMap { loaded[$0] }
             lock.unlock()
-            model.add(urls: urls, preferredMode: nil)
+            model.add(
+                urls: urls,
+                preferredMode: nil,
+                unreadableCount: providers.count - urls.count
+            )
         }
 
         return true

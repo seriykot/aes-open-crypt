@@ -209,6 +209,82 @@ final class BatchModelTests: XCTestCase {
         XCTAssertEqual(model.rows[2].status, .cancelled)
     }
 
+    func testStaleRunCompletionCannotFinishANewerRun() async throws {
+        let directory = try makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let first = directory.appendingPathComponent("first.txt")
+        let second = directory.appendingPathComponent("second.txt")
+        try Data("first\n".utf8).write(to: first)
+        try Data("second\n".utf8).write(to: second)
+
+        let model = BatchModel()
+        model.add(urls: [first], preferredMode: .encrypt)
+        model.password = "apples"
+        model.confirmation = "apples"
+        model.start()
+
+        let firstRows = model.rows
+        let firstGeneration = model.runGeneration
+        XCTAssertEqual(model.phase, .working)
+
+        model.cancel()
+        XCTAssertEqual(model.phase, .finished)
+
+        model.add(urls: [second], preferredMode: .encrypt)
+        model.password = "apples"
+        model.confirmation = "apples"
+        model.start()
+        XCTAssertEqual(model.phase, .working)
+        XCTAssertGreaterThan(model.runGeneration, firstGeneration)
+
+        // The cancelled run finishes late, after a new run has started.
+        let staleResults = firstRows.map {
+            AESCryptBatchResult(item: $0.item, failure: nil)
+        }
+        model.applyResults(
+            staleResults,
+            rowIDs: firstRows.map(\.id),
+            generation: firstGeneration
+        )
+
+        XCTAssertEqual(
+            model.phase,
+            .working,
+            "a stale completion must not finish the new run"
+        )
+        XCTAssertTrue(model.rows.allSatisfy { $0.status == .pending || $0.status == .running })
+
+        model.cancel()
+        XCTAssertEqual(model.phase, .finished)
+        XCTAssertTrue(model.rows.allSatisfy {
+            $0.status == .cancelled || $0.status == .succeeded
+        })
+        await model.activeTask?.value
+    }
+
+    func testAddReportsUnreadableDroppedFiles() throws {
+        let directory = try makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let file = directory.appendingPathComponent("notes.txt")
+        try Data("notes\n".utf8).write(to: file)
+
+        let model = BatchModel()
+        model.add(urls: [file], preferredMode: nil, unreadableCount: 2)
+
+        XCTAssertEqual(model.rows.count, 1)
+        XCTAssertEqual(model.notice, "Could not read 2 of the dropped files.")
+    }
+
+    func testAddReportsWhenEveryDroppedFileWasUnreadable() {
+        let model = BatchModel()
+        model.add(urls: [], preferredMode: nil, unreadableCount: 3)
+
+        XCTAssertTrue(model.rows.isEmpty)
+        XCTAssertEqual(model.notice, "Could not read 3 of the dropped files.")
+    }
+
     private func isFailed(_ status: BatchModel.RowStatus) -> Bool {
         if case .failed = status { return true }
         return false
