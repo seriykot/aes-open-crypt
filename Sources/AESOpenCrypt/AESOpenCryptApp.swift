@@ -18,6 +18,11 @@ struct AESOpenCryptApp: App {
                 }
                 .keyboardShortcut("o")
             }
+            CommandGroup(after: .appInfo) {
+                Button("Repair Command Line Tool") {
+                    CLIInstaller.repair()
+                }
+            }
         }
     }
 

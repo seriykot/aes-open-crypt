@@ -1,0 +1,34 @@
+#!/bin/sh
+set -eu
+
+# Installer runs this as root. $3 is the target volume ("/" for the boot disk).
+TARGET_VOLUME="${3:-/}"
+TARGET_VOLUME="${TARGET_VOLUME%/}"
+APP="${TARGET_VOLUME}/Applications/AES Open Crypt.app"
+CLI="$APP/Contents/Resources/bin/aesopen"
+BIN_DIR="${TARGET_VOLUME}/usr/local/bin"
+LINK="$BIN_DIR/aesopen"
+
+# /usr/local/bin only matters on the boot volume, where PATH includes it.
+if [ -n "$TARGET_VOLUME" ] && [ "$TARGET_VOLUME" != "/" ]; then
+    echo "Installed on $TARGET_VOLUME. Skipping the boot-volume CLI link." >&2
+    exit 0
+fi
+
+if [ ! -x "$CLI" ]; then
+    echo "aesopen not found at $CLI" >&2
+    exit 1
+fi
+
+mkdir -p "$BIN_DIR"
+
+if [ -e "$LINK" ] || [ -L "$LINK" ]; then
+    if [ -L "$LINK" ] && [ "$(readlink "$LINK")" = "$CLI" ]; then
+        exit 0
+    fi
+    echo "Refusing to replace existing $LINK" >&2
+    exit 0
+fi
+
+ln -s "$CLI" "$LINK"
+exit 0

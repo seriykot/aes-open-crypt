@@ -7,6 +7,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.servicesProvider = ServicesProvider.shared
         NSApp.activate(ignoringOtherApps: true)
+        Task { @MainActor in
+            CLIInstaller.ensureInstalled()
+        }
     }
 
     func application(_ application: NSApplication, open urls: [URL]) {

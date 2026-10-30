@@ -8,10 +8,28 @@ This is an independent implementation of the public
 [AES Crypt stream format](https://www.aescrypt.com/aes_file_format.html), not
 a wrapper around AES Crypt.
 
+## Install
+
+Download `AES Open Crypt 0.2.0.pkg` and open it. The installer puts the app in
+`/Applications` and links the command line tool at `/usr/local/bin/aesopen`, so
+`aesopen --help` works in Terminal right away.
+
+The `.zip` is the portable option: drag the app to Applications. On first
+launch it tries to create the same link; if it cannot, it shows the exact
+command to run. **AES Open Crypt → Repair Command Line Tool** fixes the link
+after the app moves, and `scripts/install-cli.sh` does the same from a
+checkout.
+
+Both builds are ad-hoc signed, not notarized. On another Mac the first launch
+needs **System Settings → Privacy & Security → Open Anyway**.
+
 ## What works
 
-- Drag a file onto the window, or use **Open File…** (⌘O).
-- `.aes` files open in decrypt mode; anything else opens in encrypt mode.
+- Drag up to 10 files onto the window, or use **Open File…** (⌘O).
+- `.aes` files open in decrypt mode; anything else opens in encrypt mode. A
+  mixed drop asks whether to encrypt or decrypt the whole batch.
+- Drop files on the Dock icon, or use the Finder Services, to open the same
+  password window.
 - Encrypt writes stream format 2 by default (opens in every AES Crypt
   release) or format 3 (AES Crypt 4.x and this app, stronger password
   hashing).
@@ -24,7 +42,6 @@ a wrapper around AES Crypt.
   `name (1)` instead.
 - Finder Services: **Encrypt with AES Open Crypt** and
   **Decrypt with AES Open Crypt**.
-- Files are handled one at a time in this version.
 
 ## Build and run
 
@@ -34,16 +51,16 @@ Requires macOS 13 or later and Xcode 26 (Swift 6.2).
 swift test
 ./scripts/build-app.sh
 open "dist/AES Open Crypt.app"
+
+./scripts/build-pkg.sh   # dist/AES Open Crypt <version>.pkg
 ```
 
-`scripts/build-app.sh` builds a release binary, assembles the `.app` bundle,
-copies the icon, and ad-hoc signs it. There is no Xcode project and no
-third-party dependency. To rebuild the icon, run
-`swift scripts/make-icon.swift` and then `iconutil`.
-
-Because the app is ad-hoc signed, the first launch on another Mac needs
-**System Settings → Privacy & Security → Open Anyway**. Signing and
-notarization are not set up yet.
+`scripts/build-app.sh` builds release binaries, embeds `aesopen` at
+`Contents/Resources/bin/aesopen`, assembles the `.app` bundle, copies the
+icon, and ad-hoc signs the CLI and the app. `scripts/build-pkg.sh` wraps the
+app in an installer package. There is no Xcode project and no third-party
+dependency. To rebuild the icon, run `swift scripts/make-icon.swift` and then
+`iconutil`.
 
 ## Command line
 
@@ -51,19 +68,21 @@ The same engine ships as `aesopen` for scripts and for checking files without
 the GUI.
 
 ```bash
-swift build -c release
-BIN=.build/release/aesopen
+BIN="dist/AES Open Crypt.app/Contents/Resources/bin/aesopen"
 
-$BIN info secret.aes
-$BIN decrypt secret.aes                  # prompts for the password
-$BIN encrypt notes.txt --format v2       # writes notes.txt.aes
-$BIN encrypt notes.txt --format v3 --iterations 600000
+$BIN --help
+$BIN encrypt notes.txt report.pdf        # writes notes.txt.aes and report.pdf.aes
+$BIN decrypt --password-file ~/.aesopen-password secret.aes
+$BIN info --json backup.aes | python3 -m json.tool
 ```
 
-`--password` exists for scripting, but it is visible in the process list.
-Prefer the prompt. Exit codes: `1` usage, `2` wrong password, `3` corrupt or
-not an AES Crypt file, `4` unsupported format, `5` file error, `130`
-cancelled.
+One run handles up to 10 files with one password. `--password-file` reads the
+first line of a file (`-` for stdin) and prevents every prompt. `--json`
+prints a machine-readable result for each file. `--password` exists for
+scripting, but it is visible in the process list and shell history. Prefer the
+prompt or the password file. Exit codes: `1` usage or more than 10 files, `2`
+wrong password, `3` corrupt or not an AES Crypt file, `4` unsupported format,
+`5` file error or existing output, `130` cancelled.
 
 ## Compatibility
 
