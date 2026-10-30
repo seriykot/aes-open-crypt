@@ -14,14 +14,21 @@ Download `AES Open Crypt 0.2.0.pkg` and open it. The installer puts the app in
 `/Applications` and links the command line tool at `/usr/local/bin/aesopen`, so
 `aesopen --help` works in Terminal right away.
 
-The `.zip` is the portable option: drag the app to Applications. On first
-launch it tries to create the same link; if it cannot, it shows the exact
-command to run. **AES Open Crypt → Repair Command Line Tool** fixes the link
-after the app moves, and `scripts/install-cli.sh` does the same from a
-checkout.
+The `.zip` is the portable option: drag the app to Applications. It cannot
+run an install script, so on first launch it tries to create the same link
+when `/usr/local/bin` is writable; otherwise it shows the exact command to
+run. **AES Open Crypt → Repair Command Line Tool** fixes the link after the
+app moves, and `scripts/install-cli.sh` does the same from a checkout.
 
-Both builds are ad-hoc signed, not notarized. On another Mac the first launch
-needs **System Settings → Privacy & Security → Open Anyway**.
+The app is ad-hoc signed and not notarized, and the package is unsigned
+because no Developer ID identity is available. On another Mac, right-click
+the app and choose **Open** (or use **System Settings → Privacy & Security →
+Open Anyway**). If Gatekeeper blocks the package, right-click it and choose
+**Open**, or run:
+
+```bash
+sudo installer -pkg "AES Open Crypt 0.2.0.pkg" -target /
+```
 
 ## What works
 
@@ -29,7 +36,9 @@ needs **System Settings → Privacy & Security → Open Anyway**.
 - `.aes` files open in decrypt mode; anything else opens in encrypt mode. A
   mixed drop asks whether to encrypt or decrypt the whole batch.
 - Drop files on the Dock icon, or use the Finder Services, to open the same
-  password window.
+  password window. Dock drops accept data files only; folders are rejected.
+- One password per batch. Every row reports its own result; if a row fails,
+  fix the password and retry only the failed rows.
 - Encrypt writes stream format 2 by default (opens in every AES Crypt
   release) or format 3 (AES Crypt 4.x and this app, stronger password
   hashing).
@@ -76,13 +85,24 @@ $BIN decrypt --password-file ~/.aesopen-password secret.aes
 $BIN info --json backup.aes | python3 -m json.tool
 ```
 
-One run handles up to 10 files with one password. `--password-file` reads the
-first line of a file (`-` for stdin) and prevents every prompt. `--json`
-prints a machine-readable result for each file. `--password` exists for
-scripting, but it is visible in the process list and shell history. Prefer the
-prompt or the password file. Exit codes: `1` usage or more than 10 files, `2`
-wrong password, `3` corrupt or not an AES Crypt file, `4` unsupported format,
-`5` file error or existing output, `130` cancelled.
+`$BIN --help` lists every option, the default output names, the exit-code
+table, and the full JSON schema. One run handles up to 10 files with one
+password. `--password-file` reads the first line of a file (`-` for stdin) and
+prevents every prompt. `--json` prints a machine-readable result for each
+file:
+
+```json
+{"version":"0.2.0","command":"encrypt","results":[
+  {"input":"/abs/notes.txt","output":"/abs/notes.txt.aes","mode":"encrypt",
+   "status":"ok","error":null}
+]}
+```
+
+`--password` exists for scripting, but it is visible in the process list and
+shell history. Prefer the prompt or the password file. Exit codes: `1` usage
+or more than 10 files, `2` wrong password, `3` corrupt or not an AES Crypt
+file, `4` unsupported format, `5` file error or existing output, `130`
+cancelled.
 
 ## Compatibility
 
