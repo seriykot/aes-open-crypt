@@ -1,3 +1,5 @@
+import AESOpenCore
+import AESCryptKit
 import AppKit
 
 @MainActor
@@ -5,11 +7,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.servicesProvider = ServicesProvider.shared
         NSApp.activate(ignoringOtherApps: true)
+        Task { @MainActor in
+            CLIInstaller.ensureInstalled()
+        }
     }
 
     func application(_ application: NSApplication, open urls: [URL]) {
         NSApp.activate(ignoringOtherApps: true)
-        AppModel.shared.open(urls: urls)
+        BatchModel.shared.add(urls: urls, preferredMode: nil)
+        NSApp.windows.first?.makeKeyAndOrderFront(nil)
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
@@ -36,14 +42,15 @@ final class ServicesProvider: NSObject {
         handle(pasteboard, mode: .decrypt)
     }
 
-    private func handle(_ pasteboard: NSPasteboard, mode: AppModel.Mode) {
+    private func handle(_ pasteboard: NSPasteboard, mode: AESCryptBatchMode) {
         MainActor.assumeIsolated {
             guard let items = pasteboard.readObjects(forClasses: [NSURL.self], options: nil) as? [URL],
-                  let first = items.first else {
+                  !items.isEmpty else {
                 return
             }
             NSApp.activate(ignoringOtherApps: true)
-            AppModel.shared.open(url: first, preferredMode: mode)
+            BatchModel.shared.add(urls: items, preferredMode: mode)
+            NSApp.windows.first?.makeKeyAndOrderFront(nil)
         }
     }
 }

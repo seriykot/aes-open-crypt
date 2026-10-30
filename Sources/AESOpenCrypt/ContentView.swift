@@ -1,25 +1,33 @@
+import AESOpenCore
 import AESCryptKit
+import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
 
 struct ContentView: View {
-    @ObservedObject var model: AppModel
+    @ObservedObject var model: BatchModel
     @State private var isTargeted = false
-    @FocusState private var passwordFocused: Bool
+    @FocusState private var focusedField: Field?
+
+    private enum Field: Hashable {
+        case password
+        case confirmation
+    }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: 16) {
             header
-            dropZone
+            fileArea
 
-            if let completed = model.completedURL {
-                success(completed)
-            } else if model.fileURL != nil {
+            if !model.rows.isEmpty {
                 form
             }
 
-            if model.isWorking {
+            if model.phase == .working {
                 progressSection
+            }
+            if model.phase == .finished {
+                finishedActions
             }
             if let error = model.errorMessage {
                 errorBanner(error)
@@ -34,10 +42,22 @@ struct ContentView: View {
             footer
         }
         .padding(24)
-        .frame(width: 560, height: 580)
+        .frame(width: 640, height: 720)
         .background(Color(nsColor: .windowBackgroundColor))
-        .onChange(of: model.fileURL) { _ in
-            passwordFocused = model.fileURL != nil
+        .onChange(of: model.rows.count) { count in
+            if count > 0, model.phase == .ready {
+                focusPasswordSoon()
+            }
+        }
+        .onChange(of: model.phase) { phase in
+            if phase == .ready, !model.rows.isEmpty {
+                focusPasswordSoon()
+            }
+        }
+        .onAppear {
+            if !model.rows.isEmpty, model.phase == .ready {
+                focusPasswordSoon()
+            }
         }
     }
 
@@ -62,7 +82,7 @@ struct ContentView: View {
 
             Spacer()
 
-            if model.fileURL != nil && !model.isWorking {
+            if !model.rows.isEmpty && model.phase != .working {
                 Button("Clear") {
                     model.clear()
                 }
@@ -71,7 +91,7 @@ struct ContentView: View {
         }
     }
 
-    private var dropZone: some View {
+    private var fileArea: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .fill(isTargeted ? Color.accentColor.opacity(0.10) : Color.primary.opacity(0.035))
@@ -81,77 +101,164 @@ struct ContentView: View {
                     style: StrokeStyle(lineWidth: 1.5, dash: [6, 4])
                 )
 
-            if let file = model.fileURL {
-                fileSummary(file)
-            } else {
+            if model.rows.isEmpty {
                 emptyDropZone
+            } else {
+                fileList
             }
         }
-        .frame(height: 148)
+        .frame(height: 300)
         .onDrop(of: [UTType.fileURL], isTargeted: $isTargeted) { providers in
             handleDrop(providers)
         }
     }
 
     private var emptyDropZone: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 10) {
             Image(systemName: "arrow.down.doc")
-                .font(.system(size: 30, weight: .light))
+                .font(.system(size: 32, weight: .light))
                 .foregroundStyle(.secondary)
-            Text("Drop a file here")
+            Text("Drop up to 10 files here")
                 .font(.headline)
-            Button("Choose File…") {
-                openFile()
+            Text("Plain files are encrypted. .aes files are decrypted.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Button("Choose Files…") {
+                openFiles()
             }
             .buttonStyle(.link)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private func fileSummary(_ file: URL) -> some View {
-        HStack(spacing: 14) {
-            Image(systemName: model.mode == .decrypt ? "lock.doc.fill" : "doc.fill")
-                .font(.system(size: 34, weight: .regular))
-                .foregroundStyle(.tint)
-                .frame(width: 48)
+    private var fileList: some View {
+        ScrollView {
+            LazyVStack(spacing: 0) {
+                ForEach(model.rows) { row in
+                    fileRow(row)
+                    if row.id != model.rows.last?.id {
+                        Divider()
+                            .padding(.leading, 54)
+                    }
+                }
+            }
+            .padding(.vertical, 6)
+        }
+        .padding(6)
+    }
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text(file.lastPathComponent)
-                    .font(.headline)
+    private func fileRow(_ row: BatchModel.Row) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: row.item.mode == .decrypt ? "lock.doc.fill" : "doc.fill")
+                .font(.system(size: 22))
+                .foregroundStyle(.tint)
+                .frame(width: 30)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(row.item.input.lastPathComponent)
+                    .font(.body.weight(.medium))
                     .lineLimit(1)
                     .truncationMode(.middle)
 
-                if let info = model.info {
-                    Text("\(byteCount(info.fileSize)) · AES Crypt format \(info.version.rawValue)")
+                HStack(spacing: 6) {
+                    Text(sizeText(for: row.item))
+                    Text("·")
+                    Text(row.item.mode == .decrypt ? "Decrypt" : "Encrypt")
+                    if let output = outputName(for: row) {
+                        Text("→")
+                        Text(output)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+                if case .failed(let message) = row.status {
+                    Text(message)
                         .font(.caption)
-                        .foregroundStyle(.secondary)
-                } else {
-                    Text("\(byteCount(fileSize(file))) · plain file")
+                        .foregroundStyle(.red)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else if let issue = row.item.issue {
+                    Text(issueText(issue))
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.orange)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
 
-            Spacer()
+            Spacer(minLength: 8)
 
-            Text(model.mode == .decrypt ? "Encrypted" : "To encrypt")
-                .font(.caption.weight(.medium))
-                .padding(.horizontal, 9)
-                .padding(.vertical, 4)
-                .background(Capsule().fill(Color.accentColor.opacity(0.12)))
-                .foregroundStyle(.tint)
+            statusView(row)
+
+            if model.phase != .working {
+                Button {
+                    model.remove(row.id)
+                } label: {
+                    Image(systemName: "minus.circle")
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                .help("Remove from batch")
+            }
         }
-        .padding(.horizontal, 20)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
+    }
+
+    @ViewBuilder
+    private func statusView(_ row: BatchModel.Row) -> some View {
+        switch row.status {
+        case .pending:
+            if row.item.issue == nil {
+                Text("Ready")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        case .running:
+            HStack(spacing: 6) {
+                ProgressView()
+                    .controlSize(.small)
+                Text("\(Int(row.fraction * 100))%")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+        case .succeeded:
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundStyle(.green)
+                .help("Finished")
+        case .failed:
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.orange)
+                .help("Failed")
+        case .cancelled:
+            Text("Cancelled")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
     }
 
     private var form: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 12) {
+            if model.hasMixedInputs {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("This drop has plain files and encrypted files")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Picker("Action", selection: $model.mode) {
+                        Text("Encrypt").tag(AESCryptBatchMode.encrypt)
+                        Text("Decrypt").tag(AESCryptBatchMode.decrypt)
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                }
+            }
+
             passwordField(
                 title: "Password",
                 placeholder: model.mode == .decrypt ? "File password" : "Choose a password",
                 text: $model.password,
-                submit: true
+                field: .password
             )
 
             if model.mode == .encrypt {
@@ -159,7 +266,7 @@ struct ContentView: View {
                     title: "Confirm password",
                     placeholder: "Repeat the password",
                     text: $model.confirmation,
-                    submit: true
+                    field: .confirmation
                 )
 
                 if !model.confirmation.isEmpty && model.password != model.confirmation {
@@ -178,38 +285,39 @@ struct ContentView: View {
                     }
                     .pickerStyle(.segmented)
                     .labelsHidden()
-                    Text(
-                        model.format == .v2
-                            ? "Opens in every AES Crypt version, including 3.14."
-                            : "Needs AES Crypt 4.x or this app. Stronger password hashing."
-                    )
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
                 }
             }
 
-            Button {
-                model.start()
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: model.mode == .decrypt ? "lock.open" : "lock")
-                    Text(model.mode == .decrypt ? "Decrypt File" : "Encrypt File")
+            if model.phase == .ready {
+                Button {
+                    model.start()
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: model.mode == .decrypt ? "lock.open" : "lock")
+                        Text(actionTitle)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 3)
                 }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 3)
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .disabled(!model.canStart)
+                .keyboardShortcut(.defaultAction)
             }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-            .disabled(!model.canStart)
-            .keyboardShortcut(.defaultAction)
         }
+    }
+
+    private var actionTitle: String {
+        let count = model.rows.count
+        let files = count == 1 ? "1 File" : "\(count) Files"
+        return model.mode == .decrypt ? "Decrypt \(files)" : "Encrypt \(files)"
     }
 
     private func passwordField(
         title: String,
         placeholder: String,
         text: Binding<String>,
-        submit: Bool
+        field: Field
     ) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title)
@@ -225,7 +333,7 @@ struct ContentView: View {
                     }
                 }
                 .textFieldStyle(.plain)
-                .focused($passwordFocused)
+                .focused($focusedField, equals: field)
 
                 Button {
                     model.showPassword.toggle()
@@ -251,9 +359,9 @@ struct ContentView: View {
 
     private var progressSection: some View {
         VStack(spacing: 8) {
-            ProgressView(value: model.progress)
+            ProgressView(value: model.overallProgress)
             HStack {
-                Text("\(Int(model.progress * 100))%")
+                Text(progressLabel)
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
                 Spacer()
@@ -265,31 +373,51 @@ struct ContentView: View {
         }
     }
 
-    private func success(_ url: URL) -> some View {
-        VStack(spacing: 10) {
-            Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 42))
-                .foregroundStyle(.green)
-            Text(model.mode == .decrypt ? "Decrypted" : "Encrypted")
-                .font(.title3.weight(.semibold))
-            Text(url.lastPathComponent)
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .truncationMode(.middle)
-            HStack(spacing: 10) {
+    private var progressLabel: String {
+        let total = model.rows.count
+        let position = model.rows.firstIndex { $0.status == .running }.map { $0 + 1 } ?? total
+        return "File \(position) of \(total) · \(Int(model.overallProgress * 100))%"
+    }
+
+    private var finishedActions: some View {
+        HStack(spacing: 10) {
+            if !model.completedOutputs.isEmpty {
                 Button("Show in Finder") {
-                    model.reveal()
+                    NSWorkspace.shared.activateFileViewerSelecting(model.completedOutputs)
                 }
                 .buttonStyle(.borderedProminent)
-                Button("Done") {
-                    model.clear()
-                }
             }
-            .padding(.top, 2)
+            if hasFailedRows {
+                Button("Retry Failed") {
+                    model.retryFailed()
+                }
+                .disabled(!canRetry)
+            }
+            Button("Done") {
+                model.clear()
+            }
+            Spacer()
+            if hasFailedRows {
+                Text("Enter a password to retry the failed files.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 4)
+    }
+
+    private var hasFailedRows: Bool {
+        model.rows.contains { row in
+            if case .failed = row.status { return true }
+            return false
+        }
+    }
+
+    private var canRetry: Bool {
+        guard hasFailedRows, !model.password.isEmpty else { return false }
+        if model.mode == .encrypt {
+            return model.password == model.confirmation
+        }
+        return true
     }
 
     private func errorBanner(_ message: String) -> some View {
@@ -312,46 +440,111 @@ struct ContentView: View {
         HStack {
             Text("Offline. No telemetry. MIT licensed.")
             Spacer()
-            Text("v0.1.0")
+            Text("v0.2.0")
         }
         .font(.caption2)
         .foregroundStyle(.tertiary)
     }
 
+    private func focusPasswordSoon() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            focusedField = .password
+        }
+    }
+
     private func handleDrop(_ providers: [NSItemProvider]) -> Bool {
-        guard let provider = providers.first else { return false }
-        provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, _ in
-            var url: URL?
-            if let data = item as? Data {
-                url = URL(dataRepresentation: data, relativeTo: nil)
-            } else if let itemURL = item as? URL {
-                url = itemURL
-            }
-            if let url {
-                DispatchQueue.main.async {
-                    model.open(url: url, preferredMode: nil)
+        guard !providers.isEmpty else { return false }
+
+        let lock = NSLock()
+        var loaded: [Int: URL] = [:]
+        let group = DispatchGroup()
+
+        for (index, provider) in providers.enumerated() {
+            group.enter()
+            provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, _ in
+                defer { group.leave() }
+
+                let url: URL?
+                if let data = item as? Data {
+                    url = URL(dataRepresentation: data, relativeTo: nil)
+                } else if let itemURL = item as? URL {
+                    url = itemURL
+                } else {
+                    url = nil
+                }
+
+                if let url {
+                    lock.lock()
+                    loaded[index] = url
+                    lock.unlock()
                 }
             }
         }
+
+        group.notify(queue: .main) {
+            lock.lock()
+            let urls = loaded.keys.sorted().compactMap { loaded[$0] }
+            lock.unlock()
+            model.add(
+                urls: urls,
+                preferredMode: nil,
+                unreadableCount: providers.count - urls.count
+            )
+        }
+
         return true
     }
 
-    private func openFile() {
+    private func openFiles() {
         let panel = NSOpenPanel()
         panel.canChooseFiles = true
         panel.canChooseDirectories = false
-        panel.allowsMultipleSelection = false
-        if panel.runModal() == .OK, let url = panel.url {
-            model.open(url: url, preferredMode: nil)
+        panel.allowsMultipleSelection = true
+        if panel.runModal() == .OK {
+            model.add(urls: panel.urls, preferredMode: nil)
         }
     }
 
-    private func byteCount(_ count: Int64) -> String {
-        ByteCountFormatter.string(fromByteCount: count, countStyle: .file)
+    private func sizeText(for item: AESCryptBatchItem) -> String {
+        if let info = item.info {
+            return ByteCountFormatter.string(fromByteCount: info.fileSize, countStyle: .file)
+        }
+        let values = try? item.input.resourceValues(forKeys: [.fileSizeKey])
+        return ByteCountFormatter.string(
+            fromByteCount: Int64(values?.fileSize ?? 0),
+            countStyle: .file
+        )
     }
 
-    private func fileSize(_ url: URL) -> Int64 {
-        let values = try? url.resourceValues(forKeys: [.fileSizeKey])
-        return Int64(values?.fileSize ?? 0)
+    private func outputName(for row: BatchModel.Row) -> String? {
+        switch row.status {
+        case .succeeded:
+            return row.item.output.lastPathComponent
+        default:
+            return nil
+        }
+    }
+
+    private func issueText(_ issue: AESCryptBatchIssue) -> String {
+        switch issue {
+        case .tooManyFiles(let maximum):
+            return "Up to \(maximum) files at a time."
+        case .notAFile:
+            return "This is a folder, not a file."
+        case .alreadyEncrypted:
+            return "This file is already encrypted."
+        case .notEncrypted:
+            return "This is not an AES Crypt file."
+        case .invalidAESFile:
+            return "This .aes file is not a valid AES Crypt file."
+        case .unsupportedVersion(let version):
+            return "AES Crypt stream format \(version) is not supported."
+        case .outputExists:
+            return "An output file with that name already exists."
+        case .sameFile:
+            return "The input and output would be the same file."
+        case .inspectFailed(let detail):
+            return "Could not read the file: \(detail)"
+        }
     }
 }

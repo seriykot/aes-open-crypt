@@ -55,7 +55,7 @@ extension AESCrypt {
         }
 
         var header = Data([0x41, 0x45, 0x53, format.rawValue, 0x00])
-        let createdBy = Data("aes-open-crypt 0.1.0".utf8)
+        let createdBy = Data("aes-open-crypt 0.2.0".utf8)
         var extensionBody = Data("CREATED_BY".utf8)
         extensionBody.append(0)
         extensionBody.append(createdBy)

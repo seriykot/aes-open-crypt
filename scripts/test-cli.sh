@@ -1,0 +1,240 @@
+#!/bin/bash
+# Exercise the aesopen command line against a real release build.
+# Optional cross-checks:
+#   AESCRYPT314=/path/to/aescrypt   (3.14 reads format 2 only)
+#   AESCRYPT4=/path/to/aescrypt     (4.x reads formats 2 and 3)
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT"
+
+echo "==> building aesopen (release)"
+swift build -c release --product aesopen >/dev/null
+BIN="$(swift build -c release --show-bin-path)/aesopen"
+[ -x "$BIN" ] || { echo "FAIL: missing $BIN" >&2; exit 1; }
+
+WORK_BASE="${TMPDIR:-/tmp}"
+WORK_BASE="${WORK_BASE%/}"
+WORK="$(mktemp -d "$WORK_BASE/aesopen-cli-test.XXXXXX")"
+trap 'rm -rf "$WORK"' EXIT
+
+PASS=0
+PW='correct horse battery staple'
+
+fail() {
+    echo "FAIL: $*" >&2
+    exit 1
+}
+
+ok() {
+    PASS=$((PASS + 1))
+    echo "ok $PASS: $*"
+}
+
+# run_expect <exit code> <command...>
+run_expect() {
+    local expected="$1"
+    shift
+    set +e
+    "$@" >"$WORK/stdout" 2>"$WORK/stderr"
+    local code=$?
+    set -e
+    if [ "$code" -ne "$expected" ]; then
+        echo "--- stderr ---" >&2
+        cat "$WORK/stderr" >&2
+        fail "expected exit $expected, got $code: $*"
+    fi
+}
+
+# ---------------------------------------------------------------- help/version
+
+HELP="$("$BIN" --help)"
+for token in \
+    'encrypt' 'decrypt' 'info' '--output' '--format' '--iterations' \
+    '--password-file' '--password' '--json' '--quiet' '--version' '--help' \
+    '10' 'Exit codes' 'JSON schema' 'process lists' \
+    '0    Every file succeeded.' '1    Usage error' '2    Wrong password' \
+    '3    Corrupt' '4    Unsupported' '5    File error' '130  Cancelled.'; do
+    grep -q -- "$token" <<<"$HELP" || fail "help is missing '$token'"
+done
+grep -q '600000' <<<"$HELP" || fail "help is missing the default iteration count"
+ok "help lists commands, options, limits, exit codes, and JSON schema"
+
+VERSION="$("$BIN" --version)"
+[ "$VERSION" = "aesopen 0.2.0" ] || fail "--version printed '$VERSION'"
+ok "--version prints 0.2.0"
+
+# ------------------------------------------------------------- batch round trip
+
+mkdir -p "$WORK/round" "$WORK/round/decrypted"
+printf 'alpha\n' >"$WORK/round/a.txt"
+printf 'bravo\n' >"$WORK/round/b.txt"
+printf 'charlie\n' >"$WORK/round/c.txt"
+BEFORE="$(cd "$WORK/round" && shasum -a 256 a.txt b.txt c.txt)"
+
+run_expect 0 "$BIN" encrypt --password "$PW" \
+    "$WORK/round/a.txt" "$WORK/round/b.txt" "$WORK/round/c.txt"
+[ "$(wc -l <"$WORK/stdout" | tr -d ' ')" -eq 3 ] || fail "encrypt did not print three output paths"
+for name in a b c; do
+    [ -f "$WORK/round/$name.txt.aes" ] || fail "missing $name.txt.aes"
+    cp "$WORK/round/$name.txt.aes" "$WORK/round/decrypted/$name.aes"
+done
+
+run_expect 0 "$BIN" decrypt --password "$PW" \
+    "$WORK/round/decrypted/a.aes" "$WORK/round/decrypted/b.aes" "$WORK/round/decrypted/c.aes"
+for name in a b c; do
+    cmp "$WORK/round/$name.txt" "$WORK/round/decrypted/$name" || fail "$name did not round trip"
+done
+AFTER="$(cd "$WORK/round" && shasum -a 256 a.txt b.txt c.txt)"
+[ "$BEFORE" = "$AFTER" ] || fail "input files changed during the batch"
+ok "three-file encrypt/decrypt round trip leaves inputs byte-identical"
+
+# ---------------------------------------------------------------- file limit
+
+mkdir -p "$WORK/eleven"
+for i in $(seq 1 11); do
+    printf 'file %s\n' "$i" >"$WORK/eleven/f$i.txt"
+done
+run_expect 1 "$BIN" encrypt --password "$PW" "$WORK/eleven"/*.txt
+grep -q '10' "$WORK/stderr" || fail "the 11-file error does not mention the limit of 10"
+[ -z "$(find "$WORK/eleven" -name '*.aes' -print -quit)" ] || fail "the 11-file run created output"
+ok "an 11-file batch exits 1 and mentions the limit of 10"
+
+mkdir -p "$WORK/unsupported"
+python3 - "$WORK/unsupported/future.aes" <<'PY'
+import sys
+open(sys.argv[1], "wb").write(b"AES\x09\x00")
+PY
+run_expect 4 "$BIN" decrypt --password "$PW" "$WORK/unsupported/future.aes"
+grep -q 'not supported' "$WORK/stderr" || fail "unsupported-version error message is missing"
+ok "an unsupported AES Crypt version exits 4"
+
+# ---------------------------------------------------------------- JSON output
+
+mkdir -p "$WORK/json"
+printf 'json payload\n' >"$WORK/json/j.txt"
+run_expect 0 "$BIN" encrypt --password "$PW" --json "$WORK/json/j.txt"
+python3 -m json.tool <"$WORK/stdout" >/dev/null || fail "--json output is not valid JSON"
+python3 - "$WORK/stdout" "$WORK/json/j.txt.aes" <<'PY' || fail "--json schema is wrong"
+import json, os, sys
+doc = json.load(open(sys.argv[1]))
+assert doc["version"] == "0.2.0", doc
+assert doc["command"] == "encrypt", doc
+assert len(doc["results"]) == 1, doc
+row = doc["results"][0]
+assert row["status"] == "ok", row
+assert row["mode"] == "encrypt", row
+assert row["error"] is None, row
+assert row["input"] == os.path.abspath(sys.argv[2][:-4]), row
+assert row["output"] == os.path.abspath(sys.argv[2]), row
+PY
+ok "--json emits the documented object and parses with json.tool"
+
+# ---------------------------------------------------------------- password file
+
+mkdir -p "$WORK/pwfile" "$WORK/pwfile/out"
+printf 'file secret\nsecond line ignored\n' >"$WORK/pwfile/password"
+printf 'password file payload\n' >"$WORK/pwfile/x.txt"
+run_expect 0 "$BIN" encrypt --password-file "$WORK/pwfile/password" "$WORK/pwfile/x.txt"
+cp "$WORK/pwfile/x.txt.aes" "$WORK/pwfile/out/x.aes"
+run_expect 0 "$BIN" decrypt --password-file "$WORK/pwfile/password" "$WORK/pwfile/out/x.aes"
+cmp "$WORK/pwfile/x.txt" "$WORK/pwfile/out/x" || fail "password file round trip failed"
+
+printf 'stdin secret\n' >"$WORK/pwfile/stdin-password"
+printf 'stdin payload\n' >"$WORK/pwfile/s.txt"
+# shellcheck disable=SC2016 # $1..$3 expand inside the inner bash.
+run_expect 0 bash -c 'cat "$1" | "$2" encrypt --password-file - "$3"' _ \
+    "$WORK/pwfile/stdin-password" "$BIN" "$WORK/pwfile/s.txt"
+[ -f "$WORK/pwfile/s.txt.aes" ] || fail "--password-file - did not read stdin"
+
+printf 'wrong password\n' >"$WORK/pwfile/wrong"
+cp "$WORK/pwfile/x.txt.aes" "$WORK/pwfile/out/wrong.aes"
+run_expect 2 "$BIN" decrypt --password-file "$WORK/pwfile/wrong" "$WORK/pwfile/out/wrong.aes"
+grep -qi 'wrong password' "$WORK/stderr" || fail "wrong-password error message is missing"
+ok "--password-file reads the first line, supports stdin, and a wrong password exits 2"
+
+run_expect 1 "$BIN" encrypt --password "$PW" --password-file "$WORK/pwfile/password" "$WORK/pwfile/x.txt"
+ok "--password with --password-file is a usage error"
+
+# ---------------------------------------------------------------- output exists
+
+mkdir -p "$WORK/exists"
+printf 'source\n' >"$WORK/exists/s.txt"
+printf 'sentinel\n' >"$WORK/exists/s.txt.aes"
+run_expect 5 "$BIN" encrypt --password "$PW" "$WORK/exists/s.txt"
+[ "$(cat "$WORK/exists/s.txt.aes")" = 'sentinel' ] || fail "an existing output was overwritten"
+ok "an existing output exits 5 and keeps its bytes"
+
+# ---------------------------------------------------------------- exit priority
+
+mkdir -p "$WORK/priority"
+printf 'priority payload\n' >"$WORK/priority/p.txt"
+run_expect 0 "$BIN" encrypt --password "$PW" "$WORK/priority/p.txt"
+mv "$WORK/priority/p.txt.aes" "$WORK/priority/good.aes"
+printf 'junk\n' >"$WORK/priority/bad.aes"
+run_expect 2 "$BIN" decrypt --password wrong "$WORK/priority/good.aes" "$WORK/priority/bad.aes"
+ok "a wrong password outranks a corrupt file in the exit code"
+
+# ---------------------------------------------------------------- info JSON
+
+run_expect 0 "$BIN" info --json "$WORK/round/a.txt.aes"
+python3 - "$WORK/stdout" <<'PY' || fail "info --json schema is wrong"
+import json, sys
+doc = json.load(open(sys.argv[1]))
+assert doc["version"] == "0.2.0", doc
+assert doc["command"] == "info", doc
+row = doc["results"][0]
+assert row["status"] == "ok", row
+assert row["format"] == "v2", row
+assert isinstance(row["size"], int) and row["size"] > 0, row
+assert isinstance(row["ciphertext"], int) and row["ciphertext"] > 0, row
+PY
+ok "info --json reports format, size, and ciphertext"
+
+# ---------------------------------------------------------------- Unicode
+
+mkdir -p "$WORK/unicode" "$WORK/unicode/out"
+UNICODE_FILE="$WORK/unicode/héllo 世界.txt"
+UNICODE_PW='pässwörd🔐'
+printf 'unicode payload\n' >"$UNICODE_FILE"
+run_expect 0 "$BIN" encrypt --password "$UNICODE_PW" "$UNICODE_FILE"
+cp "$UNICODE_FILE.aes" "$WORK/unicode/out/u.aes"
+run_expect 0 "$BIN" decrypt --password "$UNICODE_PW" "$WORK/unicode/out/u.aes"
+cmp "$UNICODE_FILE" "$WORK/unicode/out/u" || fail "Unicode round trip failed"
+ok "Unicode filename and password round trip"
+
+# ---------------------------------------------------------------- no leftovers
+
+if find "$WORK" -name '.aesopen-*' -print -quit | grep -q .; then
+    fail "temporary .aesopen-* files were left behind"
+fi
+ok "no .aesopen-* temporary files remain"
+
+# ---------------------------------------------------------------- cross-checks
+
+cross_check() {
+    local label="$1"
+    local tool="$2"
+    local formats="$3"
+    [ -n "$tool" ] || return 0
+    [ -x "$tool" ] || fail "$label cross-check tool is not executable: $tool"
+
+    local dir="$WORK/cross-$label"
+    mkdir -p "$dir"
+    printf 'cross-check payload for %s\n' "$label" >"$dir/plain.txt"
+    for format in $formats; do
+        run_expect 0 "$BIN" encrypt --password "$PW" --format "$format" \
+            -o "$dir/$format.aes" "$dir/plain.txt"
+        "$tool" -d -p "$PW" -o "$dir/$format.out" "$dir/$format.aes" >/dev/null 2>&1 \
+            || fail "$label could not decrypt our $format output"
+        cmp "$dir/plain.txt" "$dir/$format.out" || fail "$label $format round trip mismatch"
+    done
+    ok "$label decrypts our $formats output"
+}
+
+# AES Crypt 3.14 has no format 3 reader (verified: it exits with
+# "Unsupported AES file version: 3"), so it only checks format 2.
+cross_check "AES Crypt 3.14" "${AESCRYPT314:-}" "v2"
+cross_check "AES Crypt 4.7" "${AESCRYPT4:-}" "v2 v3"
+
+echo "==> $PASS CLI checks passed"
