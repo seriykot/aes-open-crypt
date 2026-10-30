@@ -12,6 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func application(_ application: NSApplication, open urls: [URL]) {
         NSApp.activate(ignoringOtherApps: true)
         BatchModel.shared.add(urls: urls, preferredMode: nil)
+        NSApp.windows.first?.makeKeyAndOrderFront(nil)
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
@@ -46,6 +47,7 @@ final class ServicesProvider: NSObject {
             }
             NSApp.activate(ignoringOtherApps: true)
             BatchModel.shared.add(urls: items, preferredMode: mode)
+            NSApp.windows.first?.makeKeyAndOrderFront(nil)
         }
     }
 }

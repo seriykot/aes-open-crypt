@@ -7,7 +7,12 @@ import UniformTypeIdentifiers
 struct ContentView: View {
     @ObservedObject var model: BatchModel
     @State private var isTargeted = false
-    @FocusState private var passwordFocused: Bool
+    @FocusState private var focusedField: Field?
+
+    private enum Field: Hashable {
+        case password
+        case confirmation
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -40,7 +45,19 @@ struct ContentView: View {
         .frame(width: 640, height: 720)
         .background(Color(nsColor: .windowBackgroundColor))
         .onChange(of: model.rows.count) { count in
-            passwordFocused = count > 0 && model.phase == .ready
+            if count > 0, model.phase == .ready {
+                focusPasswordSoon()
+            }
+        }
+        .onChange(of: model.phase) { phase in
+            if phase == .ready, !model.rows.isEmpty {
+                focusPasswordSoon()
+            }
+        }
+        .onAppear {
+            if !model.rows.isEmpty, model.phase == .ready {
+                focusPasswordSoon()
+            }
         }
     }
 
@@ -240,14 +257,16 @@ struct ContentView: View {
             passwordField(
                 title: "Password",
                 placeholder: model.mode == .decrypt ? "File password" : "Choose a password",
-                text: $model.password
+                text: $model.password,
+                field: .password
             )
 
             if model.mode == .encrypt {
                 passwordField(
                     title: "Confirm password",
                     placeholder: "Repeat the password",
-                    text: $model.confirmation
+                    text: $model.confirmation,
+                    field: .confirmation
                 )
 
                 if !model.confirmation.isEmpty && model.password != model.confirmation {
@@ -297,7 +316,8 @@ struct ContentView: View {
     private func passwordField(
         title: String,
         placeholder: String,
-        text: Binding<String>
+        text: Binding<String>,
+        field: Field
     ) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title)
@@ -313,7 +333,7 @@ struct ContentView: View {
                     }
                 }
                 .textFieldStyle(.plain)
-                .focused($passwordFocused)
+                .focused($focusedField, equals: field)
 
                 Button {
                     model.showPassword.toggle()
@@ -424,6 +444,12 @@ struct ContentView: View {
         }
         .font(.caption2)
         .foregroundStyle(.tertiary)
+    }
+
+    private func focusPasswordSoon() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            focusedField = .password
+        }
     }
 
     private func handleDrop(_ providers: [NSItemProvider]) -> Bool {

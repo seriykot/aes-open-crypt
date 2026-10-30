@@ -90,6 +90,29 @@ final class BatchModelTests: XCTestCase {
         XCTAssertFalse(plainOnly.hasMixedInputs)
     }
 
+    func testMixedBatchUsesOneModeForEveryRow() throws {
+        let directory = try makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let plain = directory.appendingPathComponent("notes.txt")
+        try Data("plain\n".utf8).write(to: plain)
+        let encrypted = try makeEncryptedFile(in: directory, name: "secret", password: "apples")
+
+        let model = BatchModel()
+        model.add(urls: [plain, encrypted], preferredMode: nil)
+
+        XCTAssertEqual(model.mode, .encrypt)
+        XCTAssertTrue(model.hasMixedInputs)
+        XCTAssertEqual(model.rows[0].item.issue, nil)
+        XCTAssertEqual(model.rows[1].item.issue, .alreadyEncrypted)
+        XCTAssertFalse(model.canStart)
+
+        model.mode = .decrypt
+        XCTAssertTrue(model.hasMixedInputs, "the inputs are still mixed after a mode switch")
+        XCTAssertEqual(model.rows[0].item.issue, .notEncrypted)
+        XCTAssertEqual(model.rows[1].item.issue, nil)
+    }
+
     func testCanStartRequiresMatchingConfirmationForEncrypt() throws {
         let directory = try makeDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }

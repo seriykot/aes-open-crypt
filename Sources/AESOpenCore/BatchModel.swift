@@ -79,7 +79,7 @@ public final class BatchModel: ObservableObject {
         guard !urls.isEmpty else { return }
 
         if phase == .working {
-            notice = "Wait for the current batch to finish."
+            notice = "Finish the current batch first."
             return
         }
         if phase == .finished {
@@ -114,7 +114,20 @@ public final class BatchModel: ObservableObject {
             mode = desiredMode
             isUpdatingMode = false
 
-            rows = plan.items.map { Row(id: UUID(), item: $0, status: .pending, fraction: 0) }
+            let effectivePlan: AESCryptBatchPlan
+            if isMixed {
+                effectivePlan = try AESCryptBatch.plan(
+                    urls: combined,
+                    mode: desiredMode,
+                    outputPolicy: .unique
+                )
+            } else {
+                effectivePlan = plan
+            }
+
+            rows = effectivePlan.items.map {
+                Row(id: UUID(), item: $0, status: .pending, fraction: 0)
+            }
             hasMixedInputs = isMixed
             phase = .ready
             overallProgress = 0
@@ -131,6 +144,7 @@ public final class BatchModel: ObservableObject {
         if rows.isEmpty {
             clear()
         } else {
+            refreshMixedFlag()
             phase = .ready
             overallProgress = 0
         }
@@ -158,7 +172,7 @@ public final class BatchModel: ObservableObject {
         do {
             plan = try AESCryptBatch.plan(
                 urls: rows.map(\.item.input),
-                mode: hasMixedInputs ? nil : mode,
+                mode: mode,
                 outputPolicy: .unique
             )
         } catch {
@@ -184,7 +198,7 @@ public final class BatchModel: ObservableObject {
         do {
             plan = try AESCryptBatch.plan(
                 urls: failedRows.map(\.item.input),
-                mode: hasMixedInputs ? nil : mode,
+                mode: mode,
                 outputPolicy: .unique
             )
         } catch {
@@ -333,8 +347,18 @@ public final class BatchModel: ObservableObject {
         rows = newRows
         phase = .ready
         overallProgress = 0
-        hasMixedInputs = false
         errorMessage = nil
+    }
+
+    private func refreshMixedFlag() {
+        guard let plan = try? AESCryptBatch.plan(
+            urls: rows.map(\.item.input),
+            outputPolicy: .unique
+        ) else {
+            return
+        }
+        let modes = Set(plan.items.map(\.mode))
+        hasMixedInputs = modes.contains(.encrypt) && modes.contains(.decrypt)
     }
 
     private static func message(for error: Error) -> String {
