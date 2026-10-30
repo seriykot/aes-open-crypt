@@ -533,6 +533,8 @@ struct ContentView: View {
             return "This is not an AES Crypt file."
         case .invalidAESFile:
             return "This .aes file is not a valid AES Crypt file."
+        case .unsupportedVersion(let version):
+            return "AES Crypt stream format \(version) is not supported."
         case .outputExists:
             return "An output file with that name already exists."
         case .sameFile:

@@ -16,6 +16,7 @@ public enum AESCryptBatchIssue: Error, Equatable, Sendable {
     case alreadyEncrypted
     case notEncrypted
     case invalidAESFile
+    case unsupportedVersion(UInt8)
     case outputExists(String)
     case sameFile
     case inspectFailed(String)
@@ -134,7 +135,9 @@ public enum AESCryptBatch {
                 switch aesError {
                 case .io(let detail):
                     issue = .inspectFailed(detail)
-                case .notAnAESFile, .unsupportedVersion, .truncated, .corrupt:
+                case .unsupportedVersion(let version):
+                    issue = .unsupportedVersion(version)
+                case .notAnAESFile, .truncated, .corrupt:
                     issue = issueForUnreadableFile(
                         mode: mode,
                         isAESExtension: isAESExtension

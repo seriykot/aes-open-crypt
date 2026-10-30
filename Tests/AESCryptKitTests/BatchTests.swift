@@ -67,6 +67,19 @@ final class BatchTests: XCTestCase {
         XCTAssertEqual(plan.items.first?.issue, .invalidAESFile)
     }
 
+    func testPlanReportsUnsupportedVersion() throws {
+        let directory = try makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let future = directory.appendingPathComponent("future.aes")
+        try Data([0x41, 0x45, 0x53, 0x09, 0x00]).write(to: future)
+
+        let plan = try AESCryptBatch.plan(urls: [future], mode: .decrypt)
+
+        XCTAssertEqual(plan.items.count, 1)
+        XCTAssertEqual(plan.items.first?.issue, .unsupportedVersion(9))
+    }
+
     func testPlanForcedEncryptRejectsEncryptedFile() throws {
         let directory = try makeDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
