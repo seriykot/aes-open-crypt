@@ -10,7 +10,9 @@ struct AESOpenCryptApp: App {
         Window("AES Open Crypt", id: "main") {
             ContentView(model: model)
         }
-        .windowResizability(.contentSize)
+        .windowStyle(.hiddenTitleBar)
+        .windowResizability(.contentMinSize)
+        .defaultSize(width: 600, height: 660)
         .commands {
             CommandGroup(replacing: .newItem) {
                 Button("Open Files…") {

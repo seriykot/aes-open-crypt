@@ -33,6 +33,7 @@ enum Theme {
 
     enum Metrics {
         static let windowPadding: CGFloat = 24
+        static let titleBarClearance: CGFloat = 32
         static let sectionSpacing: CGFloat = 16
         static let cardRadius: CGFloat = 16
         static let rowRadius: CGFloat = 10

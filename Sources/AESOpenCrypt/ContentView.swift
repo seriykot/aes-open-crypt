@@ -8,6 +8,7 @@ struct ContentView: View {
     @ObservedObject var model: BatchModel
     @State private var isTargeted = false
     @FocusState private var focusedField: Field?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private enum Field: Hashable {
         case password
@@ -35,17 +36,20 @@ struct ContentView: View {
             if let notice = model.notice {
                 Text(notice)
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Theme.textSecondary)
             }
 
             Spacer(minLength: 0)
             footer
         }
-        .padding(Theme.Metrics.windowPadding)
-        .frame(width: 640, height: 720)
+        .padding(.horizontal, Theme.Metrics.windowPadding)
+        .padding(.top, Theme.Metrics.titleBarClearance)
+        .padding(.bottom, Theme.Metrics.windowPadding)
+        .frame(minWidth: 520, idealWidth: 600, maxWidth: .infinity, minHeight: 620, idealHeight: 660, maxHeight: .infinity)
         .background(Theme.canvas)
         .tint(Theme.accent)
         .foregroundStyle(Theme.textPrimary)
+        .ignoresSafeArea(.container, edges: .top)
         .onChange(of: model.rows.count) { count in
             if count > 0, model.phase == .ready {
                 focusPasswordSoon()
@@ -83,6 +87,7 @@ struct ContentView: View {
                                 .strokeBorder(Theme.accentBorder, lineWidth: 1)
                         )
                 )
+                .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text("AES Open Crypt")
@@ -120,7 +125,8 @@ struct ContentView: View {
                 fileList
             }
         }
-        .frame(height: 300)
+        .frame(minHeight: 160, idealHeight: 240, maxHeight: .infinity)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: isTargeted)
         .onDrop(of: [UTType.fileURL], isTargeted: $isTargeted) { providers in
             handleDrop(providers)
         }
@@ -148,6 +154,7 @@ struct ContentView: View {
                     .foregroundStyle(Theme.accent)
                     .frame(width: 52, height: 52)
                     .background(Circle().fill(Theme.accentSoft))
+                    .accessibilityHidden(true)
 
                 Text("Drop files here")
                     .font(.headline)
@@ -171,13 +178,13 @@ struct ContentView: View {
 
     private var fileList: some View {
         ScrollView {
-            LazyVStack(spacing: 0) {
+            LazyVStack(spacing: 2) {
                 ForEach(model.rows) { row in
-                    fileRow(row)
-                    if row.id != model.rows.last?.id {
-                        Divider()
-                            .padding(.leading, 54)
-                    }
+                    FileRowView(
+                        row: row,
+                        phase: model.phase,
+                        onRemove: { model.remove(row.id) }
+                    )
                 }
             }
             .padding(.vertical, 6)
@@ -185,108 +192,13 @@ struct ContentView: View {
         .padding(6)
     }
 
-    private func fileRow(_ row: BatchModel.Row) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: row.item.mode == .decrypt ? "lock.doc.fill" : "doc.fill")
-                .font(.system(size: 22))
-                .foregroundStyle(.tint)
-                .frame(width: 30)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(row.item.input.lastPathComponent)
-                    .font(.body.weight(.medium))
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-
-                HStack(spacing: 6) {
-                    Text(sizeText(for: row.item))
-                    Text("·")
-                    Text(row.item.mode == .decrypt ? "Decrypt" : "Encrypt")
-                    if let output = outputName(for: row) {
-                        Text("→")
-                        Text(output)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                    }
-                }
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-                if case .failed(let message) = row.status {
-                    Text(message)
-                        .font(.caption)
-                        .foregroundStyle(.red)
-                        .fixedSize(horizontal: false, vertical: true)
-                } else if let issue = row.item.issue {
-                    Text(issueText(issue))
-                        .font(.caption)
-                        .foregroundStyle(.orange)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-
-            Spacer(minLength: 8)
-
-            statusView(row)
-
-            if model.phase != .working {
-                Button {
-                    model.remove(row.id)
-                } label: {
-                    Image(systemName: "minus.circle")
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
-                .help("Remove from batch")
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 9)
-    }
-
-    @ViewBuilder
-    private func statusView(_ row: BatchModel.Row) -> some View {
-        switch row.status {
-        case .pending:
-            if row.item.issue == nil {
-                Text("Ready")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-        case .running:
-            HStack(spacing: 6) {
-                ProgressView()
-                    .controlSize(.small)
-                Text("\(Int(row.fraction * 100))%")
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(.secondary)
-            }
-        case .succeeded:
-            Image(systemName: "checkmark.circle.fill")
-                .foregroundStyle(.green)
-                .help("Finished")
-        case .failed:
-            Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundStyle(.orange)
-                .help("Failed")
-        case .wrongPassword:
-            Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundStyle(.orange)
-                .help("Wrong password")
-        case .cancelled:
-            Text("Cancelled")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-    }
-
     private var form: some View {
         VStack(alignment: .leading, spacing: 12) {
             if model.hasMixedInputs {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("This drop has plain files and encrypted files")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(Theme.textSecondary)
                     Picker("Action", selection: $model.mode) {
                         Text("Encrypt").tag(AESCryptBatchMode.encrypt)
                         Text("Decrypt").tag(AESCryptBatchMode.decrypt)
@@ -315,13 +227,13 @@ struct ContentView: View {
                 if !model.confirmation.isEmpty && model.password != model.confirmation {
                     Text("Passwords do not match.")
                         .font(.caption)
-                        .foregroundStyle(.red)
+                        .foregroundStyle(Theme.danger)
                 }
 
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Format")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(Theme.textSecondary)
                     Picker("Format", selection: $model.format) {
                         Text("Compatible (v2)").tag(AESFormatVersion.v2)
                         Text("Strong (v3)").tag(AESFormatVersion.v3)
@@ -344,6 +256,7 @@ struct ContentView: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
+                .tint(Theme.accentFill)
                 .disabled(!model.canStart)
                 .keyboardShortcut(.defaultAction)
             }
@@ -365,8 +278,8 @@ struct ContentView: View {
     ) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .font(.caption.weight(.medium))
+                .foregroundStyle(Theme.textSecondary)
 
             HStack(spacing: 8) {
                 Group {
@@ -383,26 +296,31 @@ struct ContentView: View {
                     model.showPassword.toggle()
                 } label: {
                     Image(systemName: model.showPassword ? "eye.slash" : "eye")
+                        .font(.system(size: 13, weight: .medium))
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Theme.textSecondary)
                 .help(model.showPassword ? "Hide password" : "Show password")
+                .accessibilityLabel(model.showPassword ? "Hide password" : "Show password")
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 9)
             .background(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(Color(nsColor: .textBackgroundColor))
+                RoundedRectangle(cornerRadius: Theme.Metrics.fieldRadius, style: .continuous)
+                    .fill(Theme.surfaceRaised)
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .strokeBorder(Color.primary.opacity(0.12))
+                RoundedRectangle(cornerRadius: Theme.Metrics.fieldRadius, style: .continuous)
+                    .strokeBorder(
+                        focusedField == field ? Theme.accent : Theme.border,
+                        lineWidth: focusedField == field ? 1.5 : 1
+                    )
             )
 
             if let error {
                 Text(error)
                     .font(.caption)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(Theme.danger)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -411,15 +329,17 @@ struct ContentView: View {
     private var progressSection: some View {
         VStack(spacing: 8) {
             ProgressView(value: model.overallProgress)
+                .tint(Theme.accent)
             HStack {
                 Text(progressLabel)
                     .font(.caption.monospacedDigit())
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Theme.textSecondary)
                 Spacer()
                 Button("Cancel") {
                     model.cancel()
                 }
                 .buttonStyle(.link)
+                .tint(Theme.accent)
             }
         }
     }
@@ -432,23 +352,53 @@ struct ContentView: View {
 
     private var finishedActions: some View {
         HStack(spacing: 10) {
+            if let summary = finishedSummary {
+                Label(summary.text, systemImage: summary.isWarning ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(summary.isWarning ? Theme.danger : Theme.success)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+
+            Spacer(minLength: 0)
+
             if !model.completedOutputs.isEmpty {
                 Button("Show in Finder") {
                     NSWorkspace.shared.activateFileViewerSelecting(model.completedOutputs)
                 }
                 .buttonStyle(.borderedProminent)
+                .tint(Theme.accentFill)
             }
             if hasFailedRows {
                 Button("Retry Failed") {
                     model.retryFailed()
                 }
+                .buttonStyle(.bordered)
                 .disabled(!canRetry)
             }
             Button("Done") {
                 model.clear()
             }
-            Spacer()
+            .buttonStyle(.plain)
+            .foregroundStyle(Theme.textSecondary)
         }
+    }
+
+    private var finishedSummary: (text: String, isWarning: Bool)? {
+        let completed = model.completedOutputs.count
+        let failed = model.rows.filter { row in
+            switch row.status {
+            case .failed, .wrongPassword: return true
+            case .pending, .running, .succeeded, .cancelled: return false
+            }
+        }.count
+        guard model.rows.isEmpty == false, completed + failed > 0 else { return nil }
+
+        if failed == 0 {
+            let files = completed == 1 ? "file" : "files"
+            return (model.mode == .decrypt ? "\(completed) \(files) decrypted" : "\(completed) \(files) encrypted", false)
+        }
+        return ("\(completed) finished, \(failed) failed", true)
     }
 
     private var hasFailedRows: Bool {
@@ -471,16 +421,21 @@ struct ContentView: View {
     private func errorBanner(_ message: String) -> some View {
         HStack(alignment: .top, spacing: 8) {
             Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundStyle(.orange)
+                .foregroundStyle(Theme.danger)
             Text(message)
                 .font(.callout)
+                .foregroundStyle(Theme.danger)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(Color.orange.opacity(0.10))
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Theme.dangerSoft)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .strokeBorder(Theme.danger.opacity(0.25), lineWidth: 1)
+                )
         )
     }
 
@@ -491,7 +446,7 @@ struct ContentView: View {
             Text("v0.2.0")
         }
         .font(.caption2)
-        .foregroundStyle(.tertiary)
+        .foregroundStyle(Theme.textTertiary)
     }
 
     private func focusPasswordSoon() {
@@ -552,47 +507,171 @@ struct ContentView: View {
             model.add(urls: panel.urls, preferredMode: nil)
         }
     }
+}
 
-    private func sizeText(for item: AESCryptBatchItem) -> String {
-        if let info = item.info {
-            return ByteCountFormatter.string(fromByteCount: info.fileSize, countStyle: .file)
+private func sizeText(for item: AESCryptBatchItem) -> String {
+    if let info = item.info {
+        return ByteCountFormatter.string(fromByteCount: info.fileSize, countStyle: .file)
+    }
+    let values = try? item.input.resourceValues(forKeys: [.fileSizeKey])
+    return ByteCountFormatter.string(
+        fromByteCount: Int64(values?.fileSize ?? 0),
+        countStyle: .file
+    )
+}
+
+private func outputName(for row: BatchModel.Row) -> String? {
+    switch row.status {
+    case .succeeded:
+        return row.item.output.lastPathComponent
+    default:
+        return nil
+    }
+}
+
+private func issueText(_ issue: AESCryptBatchIssue) -> String {
+    switch issue {
+    case .tooManyFiles(let maximum):
+        return "Up to \(maximum) files at a time."
+    case .notAFile:
+        return "This is a folder, not a file."
+    case .alreadyEncrypted:
+        return "This file is already encrypted."
+    case .notEncrypted:
+        return "This is not an AES Crypt file."
+    case .invalidAESFile:
+        return "This .aes file is not a valid AES Crypt file."
+    case .unsupportedVersion(let version):
+        return "AES Crypt stream format \(version) is not supported."
+    case .outputExists:
+        return "An output file with that name already exists."
+    case .sameFile:
+        return "The input and output would be the same file."
+    case .inspectFailed(let detail):
+        return "Could not read the file: \(detail)"
+    }
+}
+
+private struct FileRowView: View {
+    let row: BatchModel.Row
+    let phase: BatchModel.Phase
+    let onRemove: () -> Void
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var isHovered = false
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: row.item.mode == .decrypt ? "lock.doc.fill" : "doc.fill")
+                .font(.system(size: 16, weight: .regular))
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(Theme.accent)
+                .frame(width: 28, height: 28)
+                .background(
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .fill(Theme.accentSoft)
+                )
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(row.item.input.lastPathComponent)
+                    .font(.body.weight(.medium))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .foregroundStyle(Theme.textPrimary)
+
+                HStack(spacing: 6) {
+                    Text(sizeText(for: row.item))
+                    Text("·")
+                    Text(row.item.mode == .decrypt ? "Decrypt" : "Encrypt")
+                    if let output = outputName(for: row) {
+                        Text("→")
+                        Text(output)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                }
+                .font(.caption)
+                .foregroundStyle(Theme.textSecondary)
+
+                if case .failed(let message) = row.status {
+                    Text(message)
+                        .font(.caption)
+                        .foregroundStyle(Theme.danger)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else if let issue = row.item.issue {
+                    Text(issueText(issue))
+                        .font(.caption)
+                        .foregroundStyle(Theme.warning)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            Spacer(minLength: 8)
+
+            statusView
+
+            if phase != .working {
+                Button {
+                    onRemove()
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 15))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(isHovered ? Theme.textSecondary : Theme.textTertiary)
+                .help("Remove from batch")
+                .accessibilityLabel("Remove \(row.item.input.lastPathComponent)")
+            }
         }
-        let values = try? item.input.resourceValues(forKeys: [.fileSizeKey])
-        return ByteCountFormatter.string(
-            fromByteCount: Int64(values?.fileSize ?? 0),
-            countStyle: .file
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
+        .background(
+            RoundedRectangle(cornerRadius: Theme.Metrics.rowRadius, style: .continuous)
+                .fill(isHovered ? Theme.surfaceRaised : Color.clear)
         )
+        .onHover { isHovered = $0 }
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: isHovered)
     }
 
-    private func outputName(for row: BatchModel.Row) -> String? {
+    @ViewBuilder
+    private var statusView: some View {
         switch row.status {
+        case .pending:
+            if row.item.issue == nil {
+                Text("Ready")
+                    .font(.caption2.weight(.medium))
+                    .foregroundStyle(Theme.textSecondary)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(Capsule().fill(Theme.surfaceRaised))
+                    .overlay(Capsule().strokeBorder(Theme.border, lineWidth: 1))
+            }
+        case .running:
+            HStack(spacing: 6) {
+                ProgressView()
+                    .controlSize(.small)
+                    .tint(Theme.accent)
+                Text("\(Int(row.fraction * 100))%")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(Theme.textSecondary)
+            }
         case .succeeded:
-            return row.item.output.lastPathComponent
-        default:
-            return nil
-        }
-    }
-
-    private func issueText(_ issue: AESCryptBatchIssue) -> String {
-        switch issue {
-        case .tooManyFiles(let maximum):
-            return "Up to \(maximum) files at a time."
-        case .notAFile:
-            return "This is a folder, not a file."
-        case .alreadyEncrypted:
-            return "This file is already encrypted."
-        case .notEncrypted:
-            return "This is not an AES Crypt file."
-        case .invalidAESFile:
-            return "This .aes file is not a valid AES Crypt file."
-        case .unsupportedVersion(let version):
-            return "AES Crypt stream format \(version) is not supported."
-        case .outputExists:
-            return "An output file with that name already exists."
-        case .sameFile:
-            return "The input and output would be the same file."
-        case .inspectFailed(let detail):
-            return "Could not read the file: \(detail)"
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundStyle(Theme.success)
+                .accessibilityLabel("Finished")
+        case .failed:
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(Theme.danger)
+                .accessibilityLabel("Failed")
+        case .wrongPassword:
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(Theme.danger)
+                .accessibilityLabel("Wrong password")
+        case .cancelled:
+            Text("Cancelled")
+                .font(.caption)
+                .foregroundStyle(Theme.textTertiary)
         }
     }
 }
