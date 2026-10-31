@@ -209,8 +209,8 @@ Intel Mac with macOS 13 or later. It is the only way to test the native
    Expected:
 
    ```
-   6d19a4e2031070d6bde20adff8d3dc7aab7247f15b9098fc5d708a514cfaa297  AES Open Crypt 0.2.0.pkg
-   6463db43c6a6caca5453867742e507d813ef115fdd1141e92a569f9e372ff7ff  AES Open Crypt 0.2.0.zip
+   e044f8b341ce05d17edfa980b27518f0c49a66289e29f0f58cd291531793e068  AES Open Crypt 0.2.0.pkg
+   d4c1f2459c6d6449f03565b2f955dbc22af2d0ca5afc0e0c81fbaf28a5481400  AES Open Crypt 0.2.0.zip
    ```
 
 2. Install the package. If Gatekeeper blocks it, right-click and choose
@@ -237,7 +237,7 @@ Intel Mac with macOS 13 or later. It is the only way to test the native
 
    ```bash
    printf 'intel test\n' > /tmp/intel.txt
-   aesopen encrypt --password test -o /tmp/intel.aes /tmp/intel.txt
+   aesopen encrypt --password test --format v2 -o /tmp/intel.aes /tmp/intel.txt
    aesopen decrypt --password test -o /tmp/intel.out /tmp/intel.aes
    cmp /tmp/intel.txt /tmp/intel.out
 
@@ -246,7 +246,8 @@ Intel Mac with macOS 13 or later. It is the only way to test the native
    cmp /tmp/intel.txt /tmp/intel.314.txt
    ```
 
-   Expected: both `cmp` commands are silent.
+   Expected: both `cmp` commands are silent. `--format v2` is explicit here
+   because AES Crypt 3.14 cannot read format 3; the CLI default is v3.
 
 5. Zip first launch: quit the app, unzip the portable build, move it to
    `~/Applications`, and launch it. Follow the expected link behavior in

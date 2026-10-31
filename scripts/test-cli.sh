@@ -52,7 +52,7 @@ HELP="$("$BIN" --help)"
 for token in \
     'encrypt' 'decrypt' 'info' '--output' '--format' '--iterations' \
     '--password-file' '--password' '--json' '--quiet' '--version' '--help' \
-    '10' 'Exit codes' 'JSON schema' 'process lists' \
+    '10' 'Exit codes' 'JSON schema' 'process lists' 'Default: v3' \
     '0    Every file succeeded.' '1    Usage error' '2    Wrong password' \
     '3    Corrupt' '4    Unsupported' '5    File error' '130  Cancelled.'; do
     grep -q -- "$token" <<<"$HELP" || fail "help is missing '$token'"
@@ -185,11 +185,21 @@ assert doc["version"] == "0.2.0", doc
 assert doc["command"] == "info", doc
 row = doc["results"][0]
 assert row["status"] == "ok", row
-assert row["format"] == "v2", row
+assert row["format"] == "v3", row
 assert isinstance(row["size"], int) and row["size"] > 0, row
 assert isinstance(row["ciphertext"], int) and row["ciphertext"] > 0, row
 PY
-ok "info --json reports format, size, and ciphertext"
+ok "info --json reports the v3 default, size, and ciphertext"
+
+run_expect 0 "$BIN" encrypt --password "$PW" --format v2 \
+    -o "$WORK/round/forced-v2.aes" "$WORK/round/a.txt"
+run_expect 0 "$BIN" info --json "$WORK/round/forced-v2.aes"
+python3 - "$WORK/stdout" <<'PY' || fail "info --json did not report the forced v2 format"
+import json, sys
+doc = json.load(open(sys.argv[1]))
+assert doc["results"][0]["format"] == "v2", doc
+PY
+ok "--format v2 still produces a v2 file"
 
 # ---------------------------------------------------------------- Unicode
 

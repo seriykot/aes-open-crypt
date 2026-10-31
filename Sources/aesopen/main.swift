@@ -28,7 +28,7 @@ Default output names:
 
 Options:
   -o, --output <path>     Exact output path. Single input only. Default: above.
-  --format <v2|v3>        Output stream format. Default: v2.
+  --format <v2|v3>        Output stream format. Default: v3.
   --iterations <n>        KDF iterations for v3. Default: 600000.
   --password <password>   Password on the command line. Visible in process
                           lists and shell history. Default: prompt.
@@ -85,7 +85,7 @@ private struct Options {
     var output: String?
     var password: String?
     var passwordFile: String?
-    var format: AESFormatVersion = .v2
+    var format: AESFormatVersion = .v3
     var iterations: UInt32 = 600_000
     var json = false
     var quiet = false

@@ -97,10 +97,11 @@ $BIN info --json backup.aes | python3 -m json.tool
 ```
 
 `$BIN --help` lists every option, the default output names, the exit-code
-table, and the full JSON schema. One run handles up to 10 files with one
-password. `--password-file` reads the first line of a file (`-` for stdin) and
-prevents every prompt. `--json` prints a machine-readable result for each
-file:
+table, and the full JSON schema. Encryption defaults to stream format 3; pass
+`--format v2` when the file must open in AES Crypt 3.x or older. One run
+handles up to 10 files with one password. `--password-file` reads the first
+line of a file (`-` for stdin) and prevents every prompt. `--json` prints a
+machine-readable result for each file:
 
 ```json
 {"version":"0.2.0","command":"encrypt","results":[
@@ -121,8 +122,8 @@ cancelled.
 |---|:-:|:-:|
 | 0 | yes | no |
 | 1 | yes | no |
-| 2 | yes | yes (default) |
-| 3 | yes | yes (option) |
+| 2 | yes | yes (option) |
+| 3 | yes | yes (default) |
 
 The test suite decrypts all 84 official AES Crypt known-answer vectors (21
 each for formats 0 through 3), the official format 3 sample, and fixtures
