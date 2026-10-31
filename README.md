@@ -39,9 +39,9 @@ sudo installer -pkg "AES Open Crypt 0.2.0.pkg" -target /
   files only; folders are rejected.
 - One password per batch. Every row reports its own result; if a row fails,
   fix the password and retry only the failed rows.
-- Encrypt writes stream format 2 by default (opens in every AES Crypt
-  release) or format 3 (AES Crypt 4.x and this app, stronger password
-  hashing).
+- The app writes stream format 3 by default (AES Crypt 4.x and this app,
+  stronger password hashing) or format 2 (opens in every AES Crypt release).
+  The picker remembers your last choice.
 - Decrypt reads stream formats 0 through 3, including files made by the
   Intel-only AES Crypt 3.14.1 for Mac.
 - Passwords are never written to disk. Output is written to a temporary file

@@ -5,6 +5,40 @@ import XCTest
 
 @MainActor
 final class BatchModelTests: XCTestCase {
+    func testFormatDefaultsToV3WithoutSavedPreference() {
+        let defaults = UserDefaults.standard
+        let previous = defaults.object(forKey: "outputFormat")
+        defer {
+            if let previous {
+                defaults.set(previous, forKey: "outputFormat")
+            } else {
+                defaults.removeObject(forKey: "outputFormat")
+            }
+        }
+        defaults.removeObject(forKey: "outputFormat")
+
+        let model = BatchModel()
+
+        XCTAssertEqual(model.format, .v3)
+    }
+
+    func testFormatUsesSavedV2Preference() {
+        let defaults = UserDefaults.standard
+        let previous = defaults.object(forKey: "outputFormat")
+        defer {
+            if let previous {
+                defaults.set(previous, forKey: "outputFormat")
+            } else {
+                defaults.removeObject(forKey: "outputFormat")
+            }
+        }
+        defaults.set(AESFormatVersion.v2.rawValue, forKey: "outputFormat")
+
+        let model = BatchModel()
+
+        XCTAssertEqual(model.format, .v2)
+    }
+
     func testAddThreeFilesCreatesRows() throws {
         let directory = try makeDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
