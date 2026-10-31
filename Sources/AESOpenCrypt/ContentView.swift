@@ -792,14 +792,17 @@ private struct FileRowView: View {
             }
         case .succeeded:
             Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 15))
                 .foregroundStyle(Theme.successIcon)
                 .accessibilityLabel("Finished")
         case .failed:
             Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 15))
                 .foregroundStyle(Theme.danger)
                 .accessibilityLabel("Failed")
         case .wrongPassword:
             Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 15))
                 .foregroundStyle(Theme.danger)
                 .accessibilityLabel("Wrong password")
         case .cancelled:
