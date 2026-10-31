@@ -76,6 +76,15 @@ public final class BatchModel: ObservableObject {
         return true
     }
 
+    /// A non-blocking hint: short passwords, or ones with neither an uppercase
+    /// letter nor a symbol, get a suggestion to use something stronger.
+    public var isPasswordWeak: Bool {
+        guard mode == .encrypt, !password.isEmpty else { return false }
+        let hasUppercase = password.contains { $0.isUppercase }
+        let hasSymbol = password.contains { $0.isPunctuation || $0.isSymbol }
+        return password.count < 8 || (!hasUppercase && !hasSymbol)
+    }
+
     public var completedOutputs: [URL] {
         rows.compactMap { row in
             row.status == .succeeded ? row.item.output : nil

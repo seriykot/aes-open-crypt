@@ -42,6 +42,9 @@ sudo installer -pkg "AES Open Crypt 0.2.0.pkg" -target /
 - The app writes stream format 3 by default (AES Crypt 4.x and this app,
   stronger password hashing) or format 2 (opens in every AES Crypt release).
   The picker remembers your last choice.
+- Weak passwords (under 8 characters, or no uppercase letter and no symbol)
+  show an amber suggestion under the password field. It never blocks
+  encryption.
 - Decrypt reads stream formats 0 through 3, including files made by the
   Intel-only AES Crypt 3.14.1 for Mac.
 - Passwords are never written to disk. Output is written to a temporary file

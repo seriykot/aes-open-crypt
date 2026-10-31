@@ -39,6 +39,36 @@ final class BatchModelTests: XCTestCase {
         XCTAssertEqual(model.format, .v2)
     }
 
+    func testWeakPasswordHintPolicy() {
+        let model = BatchModel()
+        model.mode = .encrypt
+
+        model.password = "short"
+        XCTAssertTrue(model.isPasswordWeak)
+
+        model.password = "alllowercase"
+        XCTAssertTrue(model.isPasswordWeak)
+
+        model.password = "Abcdefg"
+        XCTAssertTrue(model.isPasswordWeak)
+
+        model.password = "Password1"
+        XCTAssertFalse(model.isPasswordWeak)
+
+        model.password = "password!"
+        XCTAssertFalse(model.isPasswordWeak)
+
+        model.password = "Password!"
+        XCTAssertFalse(model.isPasswordWeak)
+
+        model.password = ""
+        XCTAssertFalse(model.isPasswordWeak)
+
+        model.mode = .decrypt
+        model.password = "short"
+        XCTAssertFalse(model.isPasswordWeak)
+    }
+
     func testAddThreeFilesCreatesRows() throws {
         let directory = try makeDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }

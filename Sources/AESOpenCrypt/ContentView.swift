@@ -216,7 +216,8 @@ struct ContentView: View {
                 text: $model.password,
                 field: .password,
                 error: model.passwordError,
-                showsRetry: showsInlineRetry
+                showsRetry: showsInlineRetry,
+                showsWeakHint: model.isPasswordWeak
             )
 
             if model.mode == .encrypt {
@@ -315,7 +316,8 @@ struct ContentView: View {
         text: Binding<String>,
         field: Field,
         error: String? = nil,
-        showsRetry: Bool = false
+        showsRetry: Bool = false,
+        showsWeakHint: Bool = false
     ) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title)
@@ -363,6 +365,17 @@ struct ContentView: View {
                     .font(.caption)
                     .foregroundStyle(Theme.danger)
                     .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if showsWeakHint {
+                HStack(alignment: .top, spacing: 5) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.caption)
+                    Text("Weak password. Use at least 8 characters and include an uppercase letter or a special character.")
+                        .font(.caption)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .foregroundStyle(Theme.warning)
             }
 
             if showsRetry {
