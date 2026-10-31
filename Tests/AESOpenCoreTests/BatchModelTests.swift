@@ -69,6 +69,79 @@ final class BatchModelTests: XCTestCase {
         XCTAssertFalse(model.isPasswordWeak)
     }
 
+    func testHintIsTrimmedCappedAndClearedAfterStart() async throws {
+        let directory = try makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let plain = directory.appendingPathComponent("notes.txt")
+        try Data("hint payload\n".utf8).write(to: plain)
+
+        let model = BatchModel()
+        model.add(urls: [plain], preferredMode: .encrypt)
+        model.password = "apples"
+        model.confirmation = "apples"
+        model.hint = "  " + String(repeating: "a", count: 300) + "  "
+
+        model.start()
+        XCTAssertEqual(model.hint, "")
+        await model.activeTask?.value
+
+        XCTAssertEqual(model.phase, .finished)
+        let output = try XCTUnwrap(model.completedOutputs.first)
+        let hint = try XCTUnwrap(try AESCrypt.inspect(url: output).passwordHint)
+        XCTAssertEqual(hint, String(repeating: "a", count: BatchModel.maximumHintLength))
+    }
+
+    func testDecryptHintsAreUniqueAndSharedOnlyWhenIdentical() throws {
+        let directory = try makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let first = try makeEncryptedFile(
+            in: directory, name: "first", password: "apples", hint: "garden"
+        )
+        let second = try makeEncryptedFile(
+            in: directory, name: "second", password: "apples", hint: "garden"
+        )
+        let third = try makeEncryptedFile(
+            in: directory, name: "third", password: "apples", hint: "pet"
+        )
+
+        let model = BatchModel()
+        model.add(urls: [first, second], preferredMode: nil)
+        XCTAssertEqual(model.mode, .decrypt)
+        XCTAssertEqual(model.decryptHints, ["garden"])
+        XCTAssertEqual(model.sharedDecryptHint, "garden")
+
+        model.clear()
+        model.add(urls: [first, third], preferredMode: nil)
+        XCTAssertEqual(model.decryptHints, ["garden", "pet"])
+        XCTAssertNil(model.sharedDecryptHint)
+    }
+
+    func testDecryptHintsIgnoreEncryptRowsAndClearResetsHint() throws {
+        let directory = try makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let plain = directory.appendingPathComponent("notes.txt")
+        try Data("plain\n".utf8).write(to: plain)
+        let encrypted = try makeEncryptedFile(
+            in: directory, name: "secret", password: "apples", hint: "garden"
+        )
+
+        let model = BatchModel()
+        model.add(urls: [plain, encrypted], preferredMode: nil)
+        XCTAssertTrue(model.hasMixedInputs)
+        XCTAssertTrue(model.decryptHints.isEmpty)
+
+        model.clear()
+        model.hint = "will be cleared"
+        model.add(urls: [encrypted], preferredMode: .decrypt)
+        XCTAssertEqual(model.sharedDecryptHint, "garden")
+
+        model.clear()
+        XCTAssertEqual(model.hint, "")
+    }
+
     func testAddThreeFilesCreatesRows() throws {
         let directory = try makeDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -388,12 +461,13 @@ final class BatchModelTests: XCTestCase {
     private func makeEncryptedFile(
         in directory: URL,
         name: String,
-        password: String
+        password: String,
+        hint: String? = nil
     ) throws -> URL {
         let plain = directory.appendingPathComponent("\(name)-source.txt")
         let encrypted = directory.appendingPathComponent("\(name).aes")
         try Data("secret \(name)\n".utf8).write(to: plain)
-        try AESCrypt.encrypt(url: plain, to: encrypted, password: password)
+        try AESCrypt.encrypt(url: plain, to: encrypted, password: password, hint: hint)
         return encrypted
     }
 

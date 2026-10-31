@@ -28,6 +28,7 @@ public final class BatchModel: ObservableObject {
     }
 
     public static let shared = BatchModel()
+    public static let maximumHintLength = 256
 
     @Published public private(set) var rows: [Row] = []
     @Published public private(set) var phase: Phase = .idle
@@ -39,6 +40,7 @@ public final class BatchModel: ObservableObject {
 
     @Published public var password = ""
     @Published public var confirmation = ""
+    @Published public var hint = ""
     @Published public var showPassword = false
 
     @Published public var mode: AESCryptBatchMode = .encrypt {
@@ -83,6 +85,26 @@ public final class BatchModel: ObservableObject {
         let hasUppercase = password.contains { $0.isUppercase }
         let hasSymbol = password.contains { $0.isPunctuation || $0.isSymbol }
         return password.count < 8 || (!hasUppercase && !hasSymbol)
+    }
+
+    /// Unique, non-empty password hints from decrypt rows, in row order.
+    public var decryptHints: [String] {
+        var seen = Set<String>()
+        var hints: [String] = []
+        for row in rows where row.item.mode == .decrypt {
+            guard let hint = row.item.info?.passwordHint,
+                  seen.insert(hint).inserted else {
+                continue
+            }
+            hints.append(hint)
+        }
+        return hints
+    }
+
+    /// The hint under the password field when every decrypt row agrees on one.
+    public var sharedDecryptHint: String? {
+        let hints = decryptHints
+        return hints.count == 1 ? hints[0] : nil
     }
 
     public var completedOutputs: [URL] {
@@ -195,6 +217,7 @@ public final class BatchModel: ObservableObject {
         notice = nil
         password = ""
         confirmation = ""
+        hint = ""
         hasMixedInputs = false
     }
 
@@ -289,8 +312,10 @@ public final class BatchModel: ObservableObject {
 
         let password = self.password
         let format = self.format
+        let hint = Self.normalizedHint(self.hint)
         self.password = ""
         self.confirmation = ""
+        self.hint = ""
 
         runGeneration += 1
         let generation = runGeneration
@@ -305,6 +330,7 @@ public final class BatchModel: ObservableObject {
                 plan: plan,
                 password: password,
                 format: format,
+                hint: hint,
                 progress: { update in
                     let newItem = update.itemIndex != lastIndex
                     let moved = update.overallFraction - lastOverall >= 0.005
@@ -418,6 +444,12 @@ public final class BatchModel: ObservableObject {
 
     private static func unreadableDropMessage(_ count: Int) -> String? {
         count > 0 ? "Could not read \(count) of the dropped files." : nil
+    }
+
+    private static func normalizedHint(_ text: String) -> String? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        return String(trimmed.prefix(maximumHintLength))
     }
 
     private static func message(for error: Error) -> String {
