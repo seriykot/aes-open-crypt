@@ -1,7 +1,13 @@
 # Manual release checks
 
-These six checks need a real desktop or a disposable macOS system. They are
-the release gates that the automated suite cannot cover.
+These checks need a real desktop or a disposable macOS system.
+
+Finder Services, **Repair Command Line Tool**, the clean-volume pkg install,
+and the zip first launch are release gates for 0.2.0.
+
+The Dock drag-and-drop checks (sections 1 to 4) are **work in progress**. The
+Dock path is experimental and not a gate for 0.2.0. Keep the steps for when
+that path is finished.
 
 Run them against the 0.2.0 artifacts:
 
@@ -19,11 +25,11 @@ printf 'secret\n' > secret.txt
 shasum -a 256 *.txt > before.sha
 ```
 
-Install the app, launch it once, then right-click its Dock icon and choose
-**Options → Keep in Dock**. The app quits after the last window closes by
-design; a Dock drop relaunches it.
+Install the app and launch it once. For the WIP Dock checks, right-click its
+Dock icon and choose **Options → Keep in Dock**. The app quits after the last
+window closes by design.
 
-## 1. Dock drop: one file
+## 1. Dock drop: one file (WIP)
 
 1. Quit the app.
 2. Drag `secret.txt` onto the Dock icon.
@@ -38,7 +44,7 @@ matches `before.sha`.
 Expected: Decrypt is preselected. Because `secret.txt` already exists, the
 output is `secret (1).txt` (the app never overwrites).
 
-## 2. Dock drop: five and ten files
+## 2. Dock drop: five and ten files (WIP)
 
 1. Drag `f1.txt` through `f5.txt` onto the Dock icon.
 2. Start with one password.
@@ -49,7 +55,7 @@ Expected: five rows, all succeed, five `.aes` files, inputs unchanged.
 
 Expected: ten rows, all succeed. No file is skipped.
 
-## 3. Dock drop: eleven files
+## 3. Dock drop: eleven files (WIP)
 
 1. Drag all eleven files onto the Dock icon.
 
@@ -60,7 +66,7 @@ output files are created.
 find ~/Desktop/aes-manual -name '*.aes' -print
 ```
 
-## 4. Drop while a batch is running
+## 4. Drop while a batch is running (WIP)
 
 1. Start an encrypt batch with a large file (200 MB or more) so there is
    time to act.
@@ -204,7 +210,7 @@ steps that led to it.
 
 ## What can be automated
 
-`open -a "AES Open Crypt.app" <files>` sends the same open event as a Dock
-drop. It can exercise the 1/5/10/11-file limits and the drop-while-working
-notice without dragging. It does not test the Dock's document-type
-filtering, the Services menu, or the Repair alert, which need a real click.
+`open -a "AES Open Crypt.app" <files>` exercises the same open handler as a
+Dock drop. It can check the 1/5/10/11-file limits and the drop-while-working
+notice without dragging. It does not test the Dock drag path, the Services
+menu, or the Repair alert. The Dock drag path is work in progress.

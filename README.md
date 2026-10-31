@@ -35,8 +35,8 @@ sudo installer -pkg "AES Open Crypt 0.2.0.pkg" -target /
 - Drag up to 10 files onto the window, or use **Open File…** (⌘O).
 - `.aes` files open in decrypt mode; anything else opens in encrypt mode. A
   mixed drop asks whether to encrypt or decrypt the whole batch.
-- Drop files on the Dock icon, or use the Finder Services, to open the same
-  password window. Dock drops accept data files only; folders are rejected.
+- Finder Services open the same password window. Window drops accept data
+  files only; folders are rejected.
 - One password per batch. Every row reports its own result; if a row fails,
   fix the password and retry only the failed rows.
 - Encrypt writes stream format 2 by default (opens in every AES Crypt
@@ -51,6 +51,13 @@ sudo installer -pkg "AES Open Crypt 0.2.0.pkg" -target /
   `name (1)` instead.
 - Finder Services: **Encrypt with AES Open Crypt** and
   **Decrypt with AES Open Crypt**.
+
+## Work in progress
+
+- **Dock drag-and-drop.** Dropping files on the Dock icon goes through the same
+  open event as `open -a`, but the Dock path has not been verified on a real
+  desktop. It is experimental: window drops and Finder Services are the
+  supported paths for 0.2.0.
 
 ## Build and run
 
