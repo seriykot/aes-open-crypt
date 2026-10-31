@@ -12,14 +12,22 @@ if [[ ! -d "$APP" ]]; then
     exit 1
 fi
 
-ROOT=$(mktemp -d "${TMPDIR:-/tmp}/aesopen-pkg.XXXXXX")
-trap 'rm -rf "$ROOT"' EXIT
+WORK=$(mktemp -d "${TMPDIR:-/tmp}/aesopen-pkg.XXXXXX")
+ROOT="$WORK/root"
+COMPONENT_PLIST="$WORK/component.plist"
+trap 'rm -rf "$WORK"' EXIT
 
 mkdir -p "$ROOT/Applications"
 COPYFILE_DISABLE=1 ditto --norsrc --noextattr "$APP" "$ROOT/Applications/AES Open Crypt.app"
 chmod +x scripts/pkg/postinstall
 
-pkgbuild --root "$ROOT" --scripts scripts/pkg \
+# Without this, Installer relocates the app to any existing copy with the same
+# bundle identifier (for example a checkout's dist/ build) and the postinstall
+# script then cannot find it in /Applications.
+pkgbuild --analyze --root "$ROOT" "$COMPONENT_PLIST" >/dev/null
+/usr/libexec/PlistBuddy -c "Set :0:BundleIsRelocatable false" "$COMPONENT_PLIST"
+
+pkgbuild --root "$ROOT" --component-plist "$COMPONENT_PLIST" --scripts scripts/pkg \
     --identifier dev.aesopencrypt.pkg --version "$VERSION" \
     --install-location / --ownership recommended \
     "$PKG"

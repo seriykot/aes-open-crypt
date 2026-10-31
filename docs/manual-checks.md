@@ -209,7 +209,7 @@ Intel Mac with macOS 13 or later. It is the only way to test the native
    Expected:
 
    ```
-   b4a02404ae7f6778076804d742f5ce38e517a5a59ba4cb05231ad3af304e9019  AES Open Crypt 0.2.0.pkg
+   5d2b8cd03a471f95707a72d0ac40e79ecccf06009d9871ac814959acde4639a4  AES Open Crypt 0.2.0.pkg
    b7fdeb0a11d6f08121eddb98a5bf4a724817ebb28bff65dbe1dbe3b86d03ccf4  AES Open Crypt 0.2.0.zip
    ```
 
