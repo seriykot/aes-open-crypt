@@ -58,6 +58,7 @@ public struct ThemePalette: Equatable, Sendable {
     public let accentSoft: ThemeRGB
     public let accentBorder: ThemeRGB
     public let success: ThemeRGB
+    public let successIcon: ThemeRGB
     public let successSoft: ThemeRGB
     public let warning: ThemeRGB
     public let warningSoft: ThemeRGB
@@ -80,6 +81,7 @@ public struct ThemePalette: Equatable, Sendable {
         accentSoft: ThemeRGB,
         accentBorder: ThemeRGB,
         success: ThemeRGB,
+        successIcon: ThemeRGB,
         successSoft: ThemeRGB,
         warning: ThemeRGB,
         warningSoft: ThemeRGB,
@@ -101,6 +103,7 @@ public struct ThemePalette: Equatable, Sendable {
         self.accentSoft = accentSoft
         self.accentBorder = accentBorder
         self.success = success
+        self.successIcon = successIcon
         self.successSoft = successSoft
         self.warning = warning
         self.warningSoft = warningSoft
@@ -124,6 +127,7 @@ public struct ThemePalette: Equatable, Sendable {
         accentSoft: ThemeRGB(hex: 0xDCE8E4),
         accentBorder: ThemeRGB(hex: 0xA9C4BD),
         success: ThemeRGB(hex: 0x2E6B45),
+        successIcon: ThemeRGB(hex: 0x2E8B57),
         successSoft: ThemeRGB(hex: 0xDCEBE1),
         warning: ThemeRGB(hex: 0x7A541A),
         warningSoft: ThemeRGB(hex: 0xF0E6D2),
@@ -147,6 +151,7 @@ public struct ThemePalette: Equatable, Sendable {
         accentSoft: ThemeRGB(hex: 0x243330),
         accentBorder: ThemeRGB(hex: 0x45605A),
         success: ThemeRGB(hex: 0x8CC0A0),
+        successIcon: ThemeRGB(hex: 0x74D398),
         successSoft: ThemeRGB(hex: 0x1E2E24),
         warning: ThemeRGB(hex: 0xD4AE70),
         warningSoft: ThemeRGB(hex: 0x2E2619),
@@ -160,7 +165,7 @@ public struct ThemePalette: Equatable, Sendable {
             canvas, surface, surfaceRaised, border, borderStrong,
             textPrimary, textSecondary, textTertiary,
             accent, accentFill, accentFillPressed, accentSoft, accentBorder,
-            success, successSoft, warning, warningSoft, danger, dangerSoft, info,
+            success, successIcon, successSoft, warning, warningSoft, danger, dangerSoft, info,
         ]
     }
 }

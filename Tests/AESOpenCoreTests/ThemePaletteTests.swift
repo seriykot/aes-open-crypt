@@ -44,6 +44,7 @@ final class ThemePaletteTests: XCTestCase {
 
         XCTAssertGreaterThanOrEqual(palette.success.contrastRatio(with: palette.surface), 4.5)
         XCTAssertGreaterThanOrEqual(palette.success.contrastRatio(with: palette.successSoft), 4.5)
+        XCTAssertGreaterThanOrEqual(palette.successIcon.contrastRatio(with: palette.surface), 3)
 
         XCTAssertGreaterThanOrEqual(palette.warning.contrastRatio(with: palette.surface), 4.5)
         XCTAssertGreaterThanOrEqual(palette.warning.contrastRatio(with: palette.warningSoft), 4.5)

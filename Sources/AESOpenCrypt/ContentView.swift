@@ -7,6 +7,7 @@ import UniformTypeIdentifiers
 struct ContentView: View {
     @ObservedObject var model: BatchModel
     @State private var isTargeted = false
+    @State private var showFormatHelp = false
     @FocusState private var focusedField: Field?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -231,9 +232,25 @@ struct ContentView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Format")
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(Theme.textSecondary)
+                    HStack(spacing: 4) {
+                        Text("Format")
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(Theme.textSecondary)
+
+                        Image(systemName: "questionmark.circle")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(Theme.textSecondary)
+                            .padding(2)
+                            .contentShape(Rectangle())
+                            .onHover { hovering in
+                                showFormatHelp = hovering
+                            }
+                            .popover(isPresented: $showFormatHelp, arrowEdge: .top) {
+                                formatHelp
+                            }
+                            .accessibilityLabel("Format help")
+                            .accessibilityHint("Compatible v2 opens in every AES Crypt release. Strong v3 uses stronger password hashing and needs AES Crypt 4.x.")
+                    }
                     Picker("Format", selection: $model.format) {
                         Text("Compatible (v2)").tag(AESFormatVersion.v2)
                         Text("Strong (v3)").tag(AESFormatVersion.v3)
@@ -267,6 +284,27 @@ struct ContentView: View {
         let count = model.rows.count
         let files = count == 1 ? "1 File" : "\(count) Files"
         return model.mode == .decrypt ? "Decrypt \(files)" : "Encrypt \(files)"
+    }
+
+    private var formatHelp: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Password format")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(Theme.textSecondary)
+            Text("Compatible (v2)")
+                .font(.callout.weight(.semibold))
+            Text("Opens in every AES Crypt release.")
+                .font(.caption)
+                .foregroundStyle(Theme.textSecondary)
+            Text("Strong (v3)")
+                .font(.callout.weight(.semibold))
+                .padding(.top, 4)
+            Text("Stronger password hashing. Needs AES Crypt 4.x or this app.")
+                .font(.caption)
+                .foregroundStyle(Theme.textSecondary)
+        }
+        .padding(12)
+        .frame(width: 250, alignment: .leading)
     }
 
     private func passwordField(
@@ -353,11 +391,15 @@ struct ContentView: View {
     private var finishedActions: some View {
         HStack(spacing: 10) {
             if let summary = finishedSummary {
-                Label(summary.text, systemImage: summary.isWarning ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(summary.isWarning ? Theme.danger : Theme.success)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
+                HStack(spacing: 5) {
+                    Image(systemName: summary.isWarning ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
+                        .foregroundStyle(summary.isWarning ? Theme.danger : Theme.successIcon)
+                    Text(summary.text)
+                        .foregroundStyle(summary.isWarning ? Theme.danger : Theme.success)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+                .font(.caption.weight(.medium))
             }
 
             Spacer(minLength: 0)
@@ -619,7 +661,7 @@ private struct FileRowView: View {
                         .font(.system(size: 15))
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(isHovered ? Theme.textSecondary : Theme.textTertiary)
+                .foregroundStyle(isHovered ? Theme.danger : Theme.danger.opacity(0.8))
                 .help("Remove from batch")
                 .accessibilityLabel("Remove \(row.item.input.lastPathComponent)")
             }
@@ -658,7 +700,7 @@ private struct FileRowView: View {
             }
         case .succeeded:
             Image(systemName: "checkmark.circle.fill")
-                .foregroundStyle(Theme.success)
+                .foregroundStyle(Theme.successIcon)
                 .accessibilityLabel("Finished")
         case .failed:
             Image(systemName: "exclamationmark.triangle.fill")

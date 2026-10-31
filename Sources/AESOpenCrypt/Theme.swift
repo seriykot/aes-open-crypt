@@ -19,6 +19,7 @@ enum Theme {
     static let accentSoft = color(light: ThemePalette.light.accentSoft, dark: ThemePalette.dark.accentSoft)
     static let accentBorder = color(light: ThemePalette.light.accentBorder, dark: ThemePalette.dark.accentBorder)
     static let success = color(light: ThemePalette.light.success, dark: ThemePalette.dark.success)
+    static let successIcon = color(light: ThemePalette.light.successIcon, dark: ThemePalette.dark.successIcon)
     static let successSoft = color(light: ThemePalette.light.successSoft, dark: ThemePalette.dark.successSoft)
     static let warning = color(light: ThemePalette.light.warning, dark: ThemePalette.dark.warning)
     static let warningSoft = color(light: ThemePalette.light.warningSoft, dark: ThemePalette.dark.warningSoft)

@@ -209,8 +209,8 @@ Intel Mac with macOS 13 or later. It is the only way to test the native
    Expected:
 
    ```
-   e739da9f430e170ee49db0cede3c0f329a77271874cebbde557c3b2b916bba74  AES Open Crypt 0.2.0.pkg
-   5e2625f8e869f90c635152173ef7a6a3edd38593798614df8e72141e488ea453  AES Open Crypt 0.2.0.zip
+   02f3e1b4681113ee1f31bfafdaeb26bf24d2f7a70b21f08e4882567163f78018  AES Open Crypt 0.2.0.pkg
+   00a3945d90177cdecfbf86bb797206eee3d5563a2bf8896a71d17f2db27cf700  AES Open Crypt 0.2.0.zip
    ```
 
 2. Install the package. If Gatekeeper blocks it, right-click and choose
@@ -278,8 +278,10 @@ Run on a real desktop in both light and dark mode (System Settings → Appearanc
 4. **Palette.** In light and dark mode, check the header, password fields,
    format picker, primary button, status pills, and footer. Expected: a deep
    muted teal accent, no stock bright blue, readable secondary text, and
-   visible borders. Run `swift test --filter ThemePaletteTests` to check the
-   contrast floors.
+   visible borders. The row remove button is a muted red and the success
+   check a brighter green. Hover the question mark next to **Format** to see
+   the v2/v3 explanation. Run `swift test --filter ThemePaletteTests` to check
+   the contrast floors.
 
 5. **Batch states.** Check each state in both modes: empty; one file; ten
    files; mixed batch (mode picker); working with percent; cancel; finished
