@@ -194,6 +194,64 @@ mkdir -p ~/.local/bin
 Restore with `sudo chmod 775 /usr/local/bin`. Delete the temporary user
 afterwards.
 
+## 9. Intel Mac (x86_64)
+
+The 0.2.0 artifacts are universal (`arm64` + `x86_64`). This check needs an
+Intel Mac with macOS 13 or later. It is the only way to test the native
+`x86_64` slice and AES Crypt 3.14, which is Intel-only.
+
+1. Transfer both artifacts and check the hashes:
+
+   ```bash
+   shasum -a 256 "AES Open Crypt 0.2.0.pkg" "AES Open Crypt 0.2.0.zip"
+   ```
+
+   Expected:
+
+   ```
+   b4a02404ae7f6778076804d742f5ce38e517a5a59ba4cb05231ad3af304e9019  AES Open Crypt 0.2.0.pkg
+   b7fdeb0a11d6f08121eddb98a5bf4a724817ebb28bff65dbe1dbe3b86d03ccf4  AES Open Crypt 0.2.0.zip
+   ```
+
+2. Install the package. If Gatekeeper blocks it, right-click and choose
+   **Open**, or run:
+
+   ```bash
+   sudo installer -pkg "AES Open Crypt 0.2.0.pkg" -target /
+   ```
+
+3. Verify the install and the architecture:
+
+   ```bash
+   pkgutil --pkg-info dev.aesopencrypt.pkg
+   lipo -archs "/Applications/AES Open Crypt.app/Contents/MacOS/AESOpenCrypt"
+   lipo -archs "/Applications/AES Open Crypt.app/Contents/Resources/bin/aesopen"
+   readlink /usr/local/bin/aesopen
+   aesopen --version
+   ```
+
+   Expected: both `lipo` lines print `x86_64 arm64`; the link points into
+   `/Applications/AES Open Crypt.app`; the version prints `aesopen 0.2.0`.
+
+4. CLI round trip and AES Crypt 3.14 cross-check:
+
+   ```bash
+   printf 'intel test\n' > /tmp/intel.txt
+   aesopen encrypt --password test -o /tmp/intel.aes /tmp/intel.txt
+   aesopen decrypt --password test -o /tmp/intel.out /tmp/intel.aes
+   cmp /tmp/intel.txt /tmp/intel.out
+
+   /Applications/AESCrypt.app/Contents/MacOS/aescrypt \
+       -d -p test -o /tmp/intel.314.txt /tmp/intel.aes
+   cmp /tmp/intel.txt /tmp/intel.314.txt
+   ```
+
+   Expected: both `cmp` commands are silent.
+
+5. Zip first launch: quit the app, unzip the portable build, move it to
+   `~/Applications`, and launch it. Follow the expected link behavior in
+   section 8.
+
 ## What to report
 
 For each check: pass or fail, macOS version, app version, the exact message
