@@ -71,6 +71,9 @@ app in an installer package. There is no Xcode project and no third-party
 dependency. To rebuild the icon, run `swift scripts/make-icon.swift` and then
 `iconutil`.
 
+The manual release checks that need a real desktop or a disposable macOS
+system are in [docs/manual-checks.md](docs/manual-checks.md).
+
 ## Command line
 
 The same engine ships as `aesopen` for scripts and for checking files without
