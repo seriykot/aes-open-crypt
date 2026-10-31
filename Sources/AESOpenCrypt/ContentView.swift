@@ -21,7 +21,7 @@ struct ContentView: View {
             header
             fileArea
 
-            if model.phase == .finished {
+            if model.phase == .finished && !showsInlineRetry {
                 finishedActions
             }
 
@@ -215,7 +215,8 @@ struct ContentView: View {
                 placeholder: model.mode == .decrypt ? "File password" : "Choose a password",
                 text: $model.password,
                 field: .password,
-                error: model.passwordError
+                error: model.passwordError,
+                showsRetry: showsInlineRetry
             )
 
             if model.mode == .encrypt {
@@ -313,7 +314,8 @@ struct ContentView: View {
         placeholder: String,
         text: Binding<String>,
         field: Field,
-        error: String? = nil
+        error: String? = nil,
+        showsRetry: Bool = false
     ) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title)
@@ -361,6 +363,18 @@ struct ContentView: View {
                     .font(.caption)
                     .foregroundStyle(Theme.danger)
                     .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if showsRetry {
+                Button("Retry") {
+                    model.retryFailed()
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .tint(Theme.accentFill)
+                .disabled(!canRetry)
+                .keyboardShortcut(.defaultAction)
+                .padding(.top, 2)
             }
         }
     }
@@ -451,6 +465,17 @@ struct ContentView: View {
             case .pending, .running, .succeeded, .cancelled: return false
             }
         }
+    }
+
+    private var hasWrongPasswordRows: Bool {
+        model.rows.contains { row in
+            if case .wrongPassword = row.status { return true }
+            return false
+        }
+    }
+
+    private var showsInlineRetry: Bool {
+        model.phase == .finished && hasWrongPasswordRows
     }
 
     private var canRetry: Bool {

@@ -209,8 +209,8 @@ Intel Mac with macOS 13 or later. It is the only way to test the native
    Expected:
 
    ```
-   e044f8b341ce05d17edfa980b27518f0c49a66289e29f0f58cd291531793e068  AES Open Crypt 0.2.0.pkg
-   d4c1f2459c6d6449f03565b2f955dbc22af2d0ca5afc0e0c81fbaf28a5481400  AES Open Crypt 0.2.0.zip
+   21750cddb50d64e7c5b896340fb8525b9a2f14e70f04e265688534fd160e9556  AES Open Crypt 0.2.0.pkg
+   c7c20539de73b7369ca1b8cf66cb0136952b7928ed7df4e4ba10baba660abdf9  AES Open Crypt 0.2.0.zip
    ```
 
 2. Install the package. If Gatekeeper blocks it, right-click and choose
@@ -288,8 +288,9 @@ Run on a real desktop in both light and dark mode (System Settings → Appearanc
    files; mixed batch (mode picker); working with percent; cancel; finished
    with the summary (the summary row with **Show in Finder** and **Done**
    sits between the file card and the password fields); wrong password (error
-   under the password field and focus returns there); corrupt file (amber
-   issue text); invalid `.aes`; eleven files (**Maximum of 10 files at a time
+   and a **Retry** button under the password field, no summary row; press
+   Return after typing the password to retry); corrupt file (amber issue
+   text); invalid `.aes`; eleven files (**Maximum of 10 files at a time
    is allowed.**). On a fresh launch the Format picker starts on **Strong
    (v3)**; choosing **Compatible (v2)** persists after quit and relaunch.
 
