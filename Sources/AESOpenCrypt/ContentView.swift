@@ -47,7 +47,7 @@ struct ContentView: View {
         .padding(.horizontal, Theme.Metrics.windowPadding)
         .padding(.top, Theme.Metrics.titleBarClearance)
         .padding(.bottom, Theme.Metrics.windowPadding)
-        .frame(minWidth: 520, idealWidth: 600, maxWidth: .infinity, minHeight: 620, idealHeight: 660, maxHeight: .infinity)
+        .frame(minWidth: 520, idealWidth: 600, maxWidth: .infinity, minHeight: 640, idealHeight: 660, maxHeight: .infinity)
         .background(Theme.canvas)
         .tint(Theme.accent)
         .foregroundStyle(Theme.textPrimary)
@@ -185,6 +185,7 @@ struct ContentView: View {
                     FileRowView(
                         row: row,
                         phase: model.phase,
+                        showsHint: model.decryptHints.count > 1,
                         onRemove: { model.remove(row.id) }
                     )
                 }
@@ -217,7 +218,8 @@ struct ContentView: View {
                 field: .password,
                 error: model.passwordError,
                 showsRetry: showsInlineRetry,
-                showsWeakHint: model.isPasswordWeak
+                showsWeakHint: model.isPasswordWeak,
+                hint: model.sharedDecryptHint
             )
 
             if model.mode == .encrypt {
@@ -233,6 +235,8 @@ struct ContentView: View {
                         .font(.caption)
                         .foregroundStyle(Theme.danger)
                 }
+
+                hintField
 
                 VStack(alignment: .leading, spacing: 6) {
                     HStack(spacing: 4) {
@@ -283,6 +287,33 @@ struct ContentView: View {
         }
     }
 
+    private var hintField: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Hint (optional)")
+                .font(.caption.weight(.medium))
+                .foregroundStyle(Theme.textSecondary)
+
+            TextField("e.g. pet name or project", text: $model.hint)
+                .textFieldStyle(.plain)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 9)
+                .background(
+                    RoundedRectangle(cornerRadius: Theme.Metrics.fieldRadius, style: .continuous)
+                        .fill(Theme.surfaceRaised)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: Theme.Metrics.fieldRadius, style: .continuous)
+                        .strokeBorder(Theme.border, lineWidth: 1)
+                )
+                .onChange(of: model.hint) { value in
+                    if value.count > BatchModel.maximumHintLength {
+                        model.hint = String(value.prefix(BatchModel.maximumHintLength))
+                    }
+                }
+                .help("Stored as plain text in the file. Anyone can read it without the password.")
+        }
+    }
+
     private var actionTitle: String {
         let count = model.rows.count
         let files = count == 1 ? "1 File" : "\(count) Files"
@@ -317,7 +348,8 @@ struct ContentView: View {
         field: Field,
         error: String? = nil,
         showsRetry: Bool = false,
-        showsWeakHint: Bool = false
+        showsWeakHint: Bool = false,
+        hint: String? = nil
     ) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title)
@@ -359,6 +391,18 @@ struct ContentView: View {
                         lineWidth: focusedField == field ? 1.5 : 1
                     )
             )
+
+            if let hint {
+                HStack(alignment: .top, spacing: 5) {
+                    Image(systemName: "info.circle")
+                        .font(.caption)
+                    Text("Hint: \(hint)")
+                        .font(.caption)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .textSelection(.enabled)
+                }
+                .foregroundStyle(Theme.info)
+            }
 
             if let error {
                 Text(error)
@@ -636,6 +680,7 @@ private func issueText(_ issue: AESCryptBatchIssue) -> String {
 private struct FileRowView: View {
     let row: BatchModel.Row
     let phase: BatchModel.Phase
+    let showsHint: Bool
     let onRemove: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -674,6 +719,14 @@ private struct FileRowView: View {
                 }
                 .font(.caption)
                 .foregroundStyle(Theme.textSecondary)
+
+                if showsHint, let hint = row.item.info?.passwordHint {
+                    Text("Hint: \(hint)")
+                        .font(.caption)
+                        .foregroundStyle(Theme.info)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .textSelection(.enabled)
+                }
 
                 if case .failed(let message) = row.status {
                     Text(message)
