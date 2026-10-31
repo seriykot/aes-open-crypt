@@ -48,7 +48,7 @@ struct MatrixOverlay: View {
         for column in 0..<columns {
             let seed: Int = Self.seed(column)
             let x: CGFloat = (CGFloat(column) + 0.5) * size.width / CGFloat(columns)
-            let speed: CGFloat = 28 + CGFloat(seed % 42)
+            let speed: CGFloat = (28 + CGFloat(seed % 42)) * 1.3
             let trail: Int = 7 + seed % 9
             let cycle: CGFloat = size.height + CGFloat(trail) * rowHeight + rowHeight
             let offset: CGFloat = CGFloat(seed % 120) * rowHeight

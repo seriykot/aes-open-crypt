@@ -209,8 +209,8 @@ Intel Mac with macOS 13 or later. It is the only way to test the native
    Expected:
 
    ```
-   d694f0cb0c5daf45da7729d5a7276f7579b835fe76932ee85f74671ace249381  AES Open Crypt 0.2.0.pkg
-   5303942ba27c556268a18a48112867c3095b1171bdd457c2830bac3207447b05  AES Open Crypt 0.2.0.zip
+   b07118fbd70f68ff3a132bc0c411a0bcc133d99caf0328db2e56bb4ba521721c  AES Open Crypt 0.2.0.pkg
+   e08ee3fa95a584a5c80d3acab409f7e213cf6db771f905218429f3dd9b77dc91  AES Open Crypt 0.2.0.zip
    ```
 
 2. Install the package. If Gatekeeper blocks it, right-click and choose
