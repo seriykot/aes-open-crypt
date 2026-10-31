@@ -19,7 +19,7 @@ struct ContentView: View {
         case confirmation
     }
 
-    private static let minimumWorkOverlayDuration: TimeInterval = 1.3
+    private static let minimumWorkOverlayDuration: TimeInterval = 1.0
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {

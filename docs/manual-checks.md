@@ -209,8 +209,8 @@ Intel Mac with macOS 13 or later. It is the only way to test the native
    Expected:
 
    ```
-   87715ffe1cb2347a43493044a3d19379d7d5750b2149c7501f3e6ac2f5803d13  AES Open Crypt 0.2.0.pkg
-   f5f7965261d992691ea4d2ee7fc936a4f79bd9991cf23b02890f398397ba74bd  AES Open Crypt 0.2.0.zip
+   d694f0cb0c5daf45da7729d5a7276f7579b835fe76932ee85f74671ace249381  AES Open Crypt 0.2.0.pkg
+   5303942ba27c556268a18a48112867c3095b1171bdd457c2830bac3207447b05  AES Open Crypt 0.2.0.zip
    ```
 
 2. Install the package. If Gatekeeper blocks it, right-click and choose
@@ -326,7 +326,7 @@ Run on a real desktop in both light and dark mode (System Settings → Appearanc
 
 9. **Running overlay.** Start a batch with a small file and with a large file
    (a few hundred MB). Expected: a matrix-style rain in the icon's teal-green
-   (80% opacity) covers the file area; it stays at least 1.3 seconds and, for
+   (80% opacity) covers the file area; it stays at least 1 second and, for
    longer runs, until the batch finishes. Reduce Motion leaves it static.
    Cancel stays clickable below the card.
 
