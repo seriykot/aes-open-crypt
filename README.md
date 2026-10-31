@@ -49,6 +49,8 @@ sudo installer -pkg "AES Open Crypt 0.2.0.pkg" -target /
 - Optional password hints. A hint is stored as a plaintext extension tag and
   is shown before the password is entered. Anyone with the file can read or
   change it; never put the password in a hint.
+- While a batch runs, a matrix-style overlay covers the file area. It stays for
+  at least 1.3 seconds and never blocks Cancel.
 - Decrypt reads stream formats 0 through 3, including files made by the
   Intel-only AES Crypt 3.14.1 for Mac.
 - Passwords are never written to disk. Output is written to a temporary file

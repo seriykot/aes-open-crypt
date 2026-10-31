@@ -8,6 +8,9 @@ struct ContentView: View {
     @ObservedObject var model: BatchModel
     @State private var isTargeted = false
     @State private var showFormatHelp = false
+    @State private var showsWorkOverlay = false
+    @State private var workOverlayStart = Date()
+    @State private var workOverlayGeneration = 0
     @FocusState private var focusedField: Field?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -15,6 +18,8 @@ struct ContentView: View {
         case password
         case confirmation
     }
+
+    private static let minimumWorkOverlayDuration: TimeInterval = 1.3
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -59,8 +64,15 @@ struct ContentView: View {
             }
         }
         .onChange(of: model.phase) { phase in
-            if phase == .ready, !model.rows.isEmpty {
-                focusPasswordSoon()
+            if phase == .working {
+                workOverlayStart = Date()
+                workOverlayGeneration += 1
+                showsWorkOverlay = true
+            } else {
+                if phase == .ready, !model.rows.isEmpty {
+                    focusPasswordSoon()
+                }
+                scheduleWorkOverlayHideIfNeeded()
             }
         }
         .onChange(of: model.passwordError) { error in
@@ -129,6 +141,19 @@ struct ContentView: View {
             }
         }
         .frame(minHeight: 160, idealHeight: 240, maxHeight: .infinity)
+        .overlay {
+            if showsWorkOverlay {
+                MatrixOverlay()
+                    .clipShape(
+                        RoundedRectangle(
+                            cornerRadius: Theme.Metrics.cardRadius,
+                            style: .continuous
+                        )
+                    )
+                    .transition(.opacity)
+            }
+        }
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.22), value: showsWorkOverlay)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: isTargeted)
         .onDrop(of: [UTType.fileURL], isTargeted: $isTargeted) { providers in
             handleDrop(providers)
@@ -578,6 +603,18 @@ struct ContentView: View {
     private func focusPasswordSoon() {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
             focusedField = .password
+        }
+    }
+
+    private func scheduleWorkOverlayHideIfNeeded() {
+        guard showsWorkOverlay else { return }
+        let elapsed = Date().timeIntervalSince(workOverlayStart)
+        let remaining = max(0, Self.minimumWorkOverlayDuration - elapsed)
+        let generation = workOverlayGeneration
+        DispatchQueue.main.asyncAfter(deadline: .now() + remaining) {
+            if generation == workOverlayGeneration {
+                showsWorkOverlay = false
+            }
         }
     }
 

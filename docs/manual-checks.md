@@ -209,8 +209,8 @@ Intel Mac with macOS 13 or later. It is the only way to test the native
    Expected:
 
    ```
-   bd4f3e4de4a826a2d212e236d4d022df86ff69060f882a2a0286fd779e95a7b8  AES Open Crypt 0.2.0.pkg
-   dcd524bbfabc31ac3b8c8441e8d3ed97a8656a9955e5dec6442e41d69083946a  AES Open Crypt 0.2.0.zip
+   87715ffe1cb2347a43493044a3d19379d7d5750b2149c7501f3e6ac2f5803d13  AES Open Crypt 0.2.0.pkg
+   f5f7965261d992691ea4d2ee7fc936a4f79bd9991cf23b02890f398397ba74bd  AES Open Crypt 0.2.0.zip
    ```
 
 2. Install the package. If Gatekeeper blocks it, right-click and choose
@@ -323,6 +323,12 @@ Run on a real desktop in both light and dark mode (System Settings → Appearanc
    its own. `aesopen info <file>` prints `password hint: garden gate`, and
    `info --json` includes a `hint` field. The CLI rejects `--hint` on decrypt
    and hints over 256 characters. Hints are plaintext and unauthenticated.
+
+9. **Running overlay.** Start a batch with a small file and with a large file
+   (a few hundred MB). Expected: a matrix-style rain in the icon's teal-green
+   (80% opacity) covers the file area; it stays at least 1.3 seconds and, for
+   longer runs, until the batch finishes. Reduce Motion leaves it static.
+   Cancel stays clickable below the card.
 
 ## What to report
 
