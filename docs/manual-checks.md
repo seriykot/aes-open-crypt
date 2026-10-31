@@ -209,8 +209,8 @@ Intel Mac with macOS 13 or later. It is the only way to test the native
    Expected:
 
    ```
-   02f3e1b4681113ee1f31bfafdaeb26bf24d2f7a70b21f08e4882567163f78018  AES Open Crypt 0.2.0.pkg
-   00a3945d90177cdecfbf86bb797206eee3d5563a2bf8896a71d17f2db27cf700  AES Open Crypt 0.2.0.zip
+   c1bc27455eb3e90cbba23568973dc58eb1cef3a1917d431cdc35a891d975de27  AES Open Crypt 0.2.0.pkg
+   9248c5962d787609af8587fcc3ab8959a9434bedc758e8134eb3bc4c33777dbf  AES Open Crypt 0.2.0.zip
    ```
 
 2. Install the package. If Gatekeeper blocks it, right-click and choose
@@ -285,9 +285,11 @@ Run on a real desktop in both light and dark mode (System Settings → Appearanc
 
 5. **Batch states.** Check each state in both modes: empty; one file; ten
    files; mixed batch (mode picker); working with percent; cancel; finished
-   with the summary; wrong password (error under the password field and focus
-   returns there); corrupt file (amber issue text); invalid `.aes`; eleven
-   files (**Maximum of 10 files at a time is allowed.**).
+   with the summary (the summary row with **Show in Finder** and **Done**
+   sits between the file card and the password fields); wrong password (error
+   under the password field and focus returns there); corrupt file (amber
+   issue text); invalid `.aes`; eleven files (**Maximum of 10 files at a time
+   is allowed.**).
 
 6. **Accessibility.** With VoiceOver, the eye buttons announce **Show
    password** / **Hide password**, the row remove button announces **Remove

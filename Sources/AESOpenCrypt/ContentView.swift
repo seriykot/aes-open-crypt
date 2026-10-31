@@ -21,15 +21,16 @@ struct ContentView: View {
             header
             fileArea
 
+            if model.phase == .finished {
+                finishedActions
+            }
+
             if !model.rows.isEmpty {
                 form
             }
 
             if model.phase == .working {
                 progressSection
-            }
-            if model.phase == .finished {
-                finishedActions
             }
             if let error = model.errorMessage {
                 errorBanner(error)
@@ -399,7 +400,7 @@ struct ContentView: View {
                         .lineLimit(1)
                         .truncationMode(.tail)
                 }
-                .font(.caption.weight(.medium))
+                .font(.body.weight(.medium))
             }
 
             Spacer(minLength: 0)
