@@ -209,8 +209,8 @@ Intel Mac with macOS 13 or later. It is the only way to test the native
    Expected:
 
    ```
-   c3c15b2ca3bc3b7bd9ab1559e7e2ea0838f9891b5e3b00b53f83b4025e866891  AES Open Crypt 0.2.0.pkg
-   adb45a257f9971e4659f4ab079489022b2b75e88644877bbb0b144eb9d4ed9f0  AES Open Crypt 0.2.0.zip
+   e2af3296656cc607d49307a505358719f18992b307dd54a0d030f0e947f4c95f  AES Open Crypt 0.2.0.pkg
+   b27d1d19abfe077a1e644c87502095915bf20037886a77bfbcbdef3976677556  AES Open Crypt 0.2.0.zip
    ```
 
 2. Install the package. If Gatekeeper blocks it, right-click and choose
@@ -244,10 +244,18 @@ Intel Mac with macOS 13 or later. It is the only way to test the native
    /Applications/AESCrypt.app/Contents/MacOS/aescrypt \
        -d -p test -o /tmp/intel.314.txt /tmp/intel.aes
    cmp /tmp/intel.txt /tmp/intel.314.txt
+
+   aesopen encrypt --password test --format v2 --hint "intel hint" \
+       -o /tmp/intel-hint.aes /tmp/intel.txt
+   /Applications/AESCrypt.app/Contents/MacOS/aescrypt \
+       -d -p test -o /tmp/intel-hint.out /tmp/intel-hint.aes
+   cmp /tmp/intel.txt /tmp/intel-hint.out
    ```
 
-   Expected: both `cmp` commands are silent. `--format v2` is explicit here
-   because AES Crypt 3.14 cannot read format 3; the CLI default is v3.
+   Expected: all `cmp` commands are silent. `--format v2` is explicit here
+   because AES Crypt 3.14 cannot read format 3; the CLI default is v3. The
+   hinted file still decrypts because AES Crypt 3.14 ignores the unknown URI
+   extension.
 
 5. Zip first launch: quit the app, unzip the portable build, move it to
    `~/Applications`, and launch it. Follow the expected link behavior in
@@ -306,6 +314,14 @@ Run on a real desktop in both light and dark mode (System Settings → Appearanc
 7. **Long content.** Use a long file name and the longest error or issue
    message. Expected: names truncate in the middle, messages wrap, and
    nothing is clipped at the minimum window size.
+
+8. **Password hints.** Encrypt a file with a hint such as `garden gate`, then
+   add the output back for decryption. Expected: the hint appears under the
+   password field before you type; it stays visible with the wrong-password
+   error and Retry; with two files that have different hints, each row shows
+   its own. `aesopen info <file>` prints `password hint: garden gate`, and
+   `info --json` includes a `hint` field. The CLI rejects `--hint` on decrypt
+   and hints over 256 characters. Hints are plaintext and unauthenticated.
 
 ## What to report
 

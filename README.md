@@ -45,6 +45,9 @@ sudo installer -pkg "AES Open Crypt 0.2.0.pkg" -target /
 - Weak passwords (under 8 characters, or no uppercase letter and no symbol)
   show an amber suggestion under the password field. It never blocks
   encryption.
+- Optional password hints. A hint is stored as a plaintext extension tag and
+  is shown before the password is entered. Anyone with the file can read or
+  change it; never put the password in a hint.
 - Decrypt reads stream formats 0 through 3, including files made by the
   Intel-only AES Crypt 3.14.1 for Mac.
 - Passwords are never written to disk. Output is written to a temporary file
@@ -113,6 +116,10 @@ machine-readable result for each file:
 ]}
 ```
 
+`--hint "text"` writes an optional plaintext hint during encryption. `aesopen
+info` prints it, and `info --json` includes a `hint` field. The hint is not
+encrypted or authenticated.
+
 `--password` exists for scripting, but it is visible in the process list and
 shell history. Prefer the prompt or the password file. Exit codes: `1` usage
 or more than 10 files, `2` wrong password, `3` corrupt or not an AES Crypt
@@ -135,6 +142,8 @@ this implementation and decrypts the result with AES Crypt 3.14 itself.
 Manual cross-checks with AES Crypt 4.7.0 cover both directions: 4.7.0 reads
 this app's format 2 and 3 output, and this app reads 4.7.0's format 3
 output, including non-ASCII passwords and non-default KDF iteration counts.
+Password hints use a URI extension tag; AES Crypt 3.14 and 4.x ignore it and
+still decrypt the file.
 
 ## Security notes
 
@@ -147,6 +156,8 @@ output, including non-ASCII passwords and non-default KDF iteration counts.
   when you control both ends.
 - CBC with a random IV per file, plus a random session key wrapped under the
   password-derived key. The header and payload each carry an HMAC-SHA256.
+- Password hints are plaintext extension tags. They are neither encrypted nor
+  authenticated, so anyone can read or change them without the password.
 - Temporary files are created with mode `0600` next to the destination.
   Decrypted files stay `0600`; encrypted files are `0644`.
 - Input files are opened read-only and are never written to. The engine
