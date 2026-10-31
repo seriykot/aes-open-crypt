@@ -10,6 +10,9 @@ public enum AESPasswordHint {
     /// format requires.
     public static let extensionIdentifier =
         "https://github.com/seriykot/aes-open-crypt/extensions/password-hint"
+
+    /// Product limit for the UI and CLI. The format itself allows much more.
+    public static let maximumLength = 256
 }
 
 public extension AESFileInfo {

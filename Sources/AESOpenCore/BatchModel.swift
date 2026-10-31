@@ -28,7 +28,7 @@ public final class BatchModel: ObservableObject {
     }
 
     public static let shared = BatchModel()
-    public static let maximumHintLength = 256
+    public static let maximumHintLength = AESPasswordHint.maximumLength
 
     @Published public private(set) var rows: [Row] = []
     @Published public private(set) var phase: Phase = .idle

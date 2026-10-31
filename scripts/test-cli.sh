@@ -52,7 +52,7 @@ HELP="$("$BIN" --help)"
 for token in \
     'encrypt' 'decrypt' 'info' '--output' '--format' '--iterations' \
     '--password-file' '--password' '--json' '--quiet' '--version' '--help' \
-    '10' 'Exit codes' 'JSON schema' 'process lists' 'Default: v3' \
+    '--hint' '10' 'Exit codes' 'JSON schema' 'process lists' 'Default: v3' \
     '0    Every file succeeded.' '1    Usage error' '2    Wrong password' \
     '3    Corrupt' '4    Unsupported' '5    File error' '130  Cancelled.'; do
     grep -q -- "$token" <<<"$HELP" || fail "help is missing '$token'"
@@ -201,6 +201,27 @@ assert doc["results"][0]["format"] == "v2", doc
 PY
 ok "--format v2 still produces a v2 file"
 
+# ---------------------------------------------------------------- password hint
+
+mkdir -p "$WORK/hint"
+printf 'hint payload\n' >"$WORK/hint/h.txt"
+run_expect 0 "$BIN" encrypt --password "$PW" --hint "pet name" "$WORK/hint/h.txt"
+run_expect 0 "$BIN" info "$WORK/hint/h.txt.aes"
+grep -q 'password hint: pet name' "$WORK/stdout" || fail "info did not print the password hint"
+run_expect 0 "$BIN" info --json "$WORK/hint/h.txt.aes"
+python3 - "$WORK/stdout" <<'PY' || fail "info --json did not report the hint"
+import json, sys
+doc = json.load(open(sys.argv[1]))
+assert doc["results"][0]["hint"] == "pet name", doc
+PY
+cp "$WORK/hint/h.txt.aes" "$WORK/hint/out.aes"
+run_expect 0 "$BIN" decrypt --password "$PW" "$WORK/hint/out.aes"
+cmp "$WORK/hint/h.txt" "$WORK/hint/out" || fail "hint round trip failed"
+run_expect 1 "$BIN" decrypt --password "$PW" --hint "not allowed" "$WORK/hint/h.txt.aes"
+LONG_HINT="$(python3 -c 'print("a" * 300)')"
+run_expect 1 "$BIN" encrypt --password "$PW" --hint "$LONG_HINT" "$WORK/hint/h.txt"
+ok "password hints round trip, appear in info, and are encrypt-only"
+
 # ---------------------------------------------------------------- Unicode
 
 mkdir -p "$WORK/unicode" "$WORK/unicode/out"
@@ -238,6 +259,13 @@ cross_check() {
         "$tool" -d -p "$PW" -o "$dir/$format.out" "$dir/$format.aes" >/dev/null 2>&1 \
             || fail "$label could not decrypt our $format output"
         cmp "$dir/plain.txt" "$dir/$format.out" || fail "$label $format round trip mismatch"
+
+        run_expect 0 "$BIN" encrypt --password "$PW" --format "$format" \
+            --hint "cross-check hint" -o "$dir/$format-hint.aes" "$dir/plain.txt"
+        "$tool" -d -p "$PW" -o "$dir/$format-hint.out" "$dir/$format-hint.aes" >/dev/null 2>&1 \
+            || fail "$label could not decrypt our hinted $format output"
+        cmp "$dir/plain.txt" "$dir/$format-hint.out" \
+            || fail "$label hinted $format round trip mismatch"
     done
     ok "$label decrypts our $formats output"
 }

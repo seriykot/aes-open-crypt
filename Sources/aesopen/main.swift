@@ -29,6 +29,8 @@ Default output names:
 Options:
   -o, --output <path>     Exact output path. Single input only. Default: above.
   --format <v2|v3>        Output stream format. Default: v3.
+  --hint <text>           Plaintext password hint. Encrypt only, up to 256
+                          characters. Default: none.
   --iterations <n>        KDF iterations for v3. Default: 600000.
   --password <password>   Password on the command line. Visible in process
                           lists and shell history. Default: prompt.
@@ -70,13 +72,15 @@ JSON schema:
     ]
   }
   "command" is encrypt, decrypt, or info. info results also carry "format",
-  "size", "ciphertext", "kdfIterations", and "extensions". Error codes match
-  the exit-code table.
+  "size", "ciphertext", "kdfIterations", "hint", and "extensions". Error codes
+  match the exit-code table.
 
 Security:
   Passwords passed with --password appear in process lists and shell history.
   Prefer the interactive prompt or --password-file with a file readable only
-  by you. aesopen never stores, logs, or transmits passwords.
+  by you. aesopen never stores, logs, or transmits passwords. Password hints
+  are stored as plaintext extensions in the file and are not authenticated;
+  anyone can read or change them without the password.
 """
 
 nonisolated(unsafe) private var interrupted: sig_atomic_t = 0
@@ -86,6 +90,7 @@ private struct Options {
     var password: String?
     var passwordFile: String?
     var format: AESFormatVersion = .v3
+    var hint: String?
     var iterations: UInt32 = 600_000
     var json = false
     var quiet = false
@@ -145,6 +150,18 @@ private func run() throws {
             throw CLIError.usage("-o/--output is valid only with a single input file")
         }
     }
+    if let hint = options.hint {
+        guard command == .encrypt else {
+            throw CLIError.usage("--hint is valid only with encrypt")
+        }
+        let trimmed = hint.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.count > AESPasswordHint.maximumLength {
+            throw CLIError.usage(
+                "--hint is limited to \(AESPasswordHint.maximumLength) characters"
+            )
+        }
+        options.hint = trimmed.isEmpty ? nil : trimmed
+    }
 
     let urls = options.inputs.map { URL(fileURLWithPath: $0) }
     switch command {
@@ -193,6 +210,8 @@ private func parse(_ arguments: [String], into options: inout Options) throws {
             default:
                 throw CLIError.usage("unknown format '\(raw)'")
             }
+        case "--hint":
+            options.hint = try value(after: &index, in: arguments, name: argument)
         case "--iterations":
             let raw = try value(after: &index, in: arguments, name: argument)
             guard let value = UInt32(raw), value > 0 else {
@@ -262,6 +281,7 @@ private func transform(urls: [URL], mode: AESCryptBatchMode, options: Options) t
         password: password,
         format: options.format,
         iterations: options.iterations,
+        hint: options.hint,
         progress: batchProgressHandler(options),
         isCancelled: { interrupted != 0 }
     )
@@ -287,6 +307,7 @@ private func runDirect(
                 password: password,
                 format: options.format,
                 iterations: options.iterations,
+                hint: options.hint,
                 progress: directProgressHandler(options),
                 isCancelled: { interrupted != 0 }
             )
@@ -359,9 +380,15 @@ private func printInfo(_ url: URL) throws {
     if let iterations = info.kdfIterations {
         print("kdf iterations: \(iterations)")
     }
-    if !info.extensions.isEmpty {
+    if let hint = info.passwordHint {
+        print("password hint: \(hint)")
+    }
+    let otherExtensions = info.extensions.filter {
+        !$0.identifier.isEmpty && $0.identifier != AESPasswordHint.extensionIdentifier
+    }
+    if !otherExtensions.isEmpty {
         print("extensions:")
-        for item in info.extensions where !item.identifier.isEmpty {
+        for item in otherExtensions {
             let value = String(data: item.value, encoding: .utf8) ?? "<binary>"
             print("  \(item.identifier) = \(value)")
         }
@@ -376,6 +403,7 @@ private func infoJSON(url: URL, info: AESFileInfo) -> [String: Any] {
         "size": info.fileSize,
         "ciphertext": info.ciphertextLength,
         "kdfIterations": info.kdfIterations.map { Int($0) } ?? NSNull(),
+        "hint": info.passwordHint ?? NSNull(),
         "extensions": info.extensions.map { item in
             [
                 "identifier": item.identifier,
