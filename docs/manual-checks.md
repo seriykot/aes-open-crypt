@@ -59,7 +59,7 @@ Expected: ten rows, all succeed. No file is skipped.
 
 1. Drag all eleven files onto the Dock icon.
 
-Expected: one message, **Up to 10 files at a time.**; no rows are added; no
+Expected: one message, **Maximum of 10 files at a time is allowed.**; no rows are added; no
 output files are created.
 
 ```bash
@@ -209,8 +209,8 @@ Intel Mac with macOS 13 or later. It is the only way to test the native
    Expected:
 
    ```
-   5d2b8cd03a471f95707a72d0ac40e79ecccf06009d9871ac814959acde4639a4  AES Open Crypt 0.2.0.pkg
-   b7fdeb0a11d6f08121eddb98a5bf4a724817ebb28bff65dbe1dbe3b86d03ccf4  AES Open Crypt 0.2.0.zip
+   e739da9f430e170ee49db0cede3c0f329a77271874cebbde557c3b2b916bba74  AES Open Crypt 0.2.0.pkg
+   5e2625f8e869f90c635152173ef7a6a3edd38593798614df8e72141e488ea453  AES Open Crypt 0.2.0.zip
    ```
 
 2. Install the package. If Gatekeeper blocks it, right-click and choose
@@ -251,6 +251,52 @@ Intel Mac with macOS 13 or later. It is the only way to test the native
 5. Zip first launch: quit the app, unzip the portable build, move it to
    `~/Applications`, and launch it. Follow the expected link behavior in
    section 8.
+
+## 10. UI appearance and window behavior
+
+Run on a real desktop in both light and dark mode (System Settings → Appearance).
+
+1. **First launch.** Clear the app's preferences and saved state, then launch:
+
+   ```bash
+   defaults delete dev.aesopencrypt.app 2>/dev/null
+   rm -rf "$HOME/Library/Saved Application State/dev.aesopencrypt.app.savedState"
+   ```
+
+   Expected: a 600×660 window, centered, with no title bar strip and no window
+   title. The traffic lights float over the top-left; the header starts 32pt
+   below the window top. Nothing is clipped.
+
+2. **Resize.** Drag any window edge or corner, and use the green traffic
+   light. Expected: the window resizes freely above its minimum (about
+   520×620 of content); the file list grows and scrolls; the form and footer
+   stay visible. Quit and relaunch: the resized frame is restored.
+
+3. **Drag the window.** Click an empty part of the background and drag.
+   Expected: the window moves without a title bar.
+
+4. **Palette.** In light and dark mode, check the header, password fields,
+   format picker, primary button, status pills, and footer. Expected: a deep
+   muted teal accent, no stock bright blue, readable secondary text, and
+   visible borders. Run `swift test --filter ThemePaletteTests` to check the
+   contrast floors.
+
+5. **Batch states.** Check each state in both modes: empty; one file; ten
+   files; mixed batch (mode picker); working with percent; cancel; finished
+   with the summary; wrong password (error under the password field and focus
+   returns there); corrupt file (amber issue text); invalid `.aes`; eleven
+   files (**Maximum of 10 files at a time is allowed.**).
+
+6. **Accessibility.** With VoiceOver, the eye buttons announce **Show
+   password** / **Hide password**, the row remove button announces **Remove
+   <file name>**, and the success and failure icons announce **Finished**,
+   **Failed**, or **Wrong password**. Enable **Increase Contrast**, **Reduce
+   Transparency**, and **Reduce Motion**: text stays readable, and the drop
+   target and row hover changes are instant or subtle.
+
+7. **Long content.** Use a long file name and the longest error or issue
+   message. Expected: names truncate in the middle, messages wrap, and
+   nothing is clipped at the minimum window size.
 
 ## What to report
 

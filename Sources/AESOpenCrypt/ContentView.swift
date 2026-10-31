@@ -532,7 +532,7 @@ private func outputName(for row: BatchModel.Row) -> String? {
 private func issueText(_ issue: AESCryptBatchIssue) -> String {
     switch issue {
     case .tooManyFiles(let maximum):
-        return "Up to \(maximum) files at a time."
+        return "Maximum of \(maximum) files at a time is allowed."
     case .notAFile:
         return "This is a folder, not a file."
     case .alreadyEncrypted:

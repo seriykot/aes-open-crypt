@@ -420,7 +420,7 @@ public final class BatchModel: ObservableObject {
     private static func message(for issue: AESCryptBatchIssue) -> String {
         switch issue {
         case .tooManyFiles(let maximum):
-            return "Up to \(maximum) files at a time."
+            return "Maximum of \(maximum) files at a time is allowed."
         case .notAFile:
             return "That item is a folder, not a file."
         case .alreadyEncrypted:
