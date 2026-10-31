@@ -188,6 +188,31 @@ final class PasswordHintTests: XCTestCase {
         )
     }
 
+    func testHintIsUnauthenticatedButPayloadStillVerifies() throws {
+        let plaintext = Data("tamper payload".utf8)
+        let files = try encryptedFile(plaintext, format: .v3, hint: "garden gate")
+        let decrypted = temporaryOutput("hint-tamper-out-\(UUID().uuidString)")
+        defer {
+            cleanUp(files.input, files.output)
+            try? FileManager.default.removeItem(at: decrypted)
+        }
+
+        var bytes = try Data(contentsOf: files.output)
+        var marker = Data(AESPasswordHint.extensionIdentifier.utf8)
+        marker.append(0)
+        marker.append(Data("garden gate".utf8))
+        let markerRange = try XCTUnwrap(bytes.range(of: marker))
+        let valueOffset = markerRange.lowerBound
+            + AESPasswordHint.extensionIdentifier.utf8.count + 1
+        bytes[valueOffset] = UInt8(ascii: "G")
+        try bytes.write(to: files.output)
+
+        XCTAssertEqual(try AESCrypt.inspect(url: files.output).passwordHint, "Garden gate")
+
+        try AESCrypt.decrypt(url: files.output, to: decrypted, password: "apples")
+        XCTAssertEqual(try Data(contentsOf: decrypted), plaintext)
+    }
+
     func testFixtureContainerExtensionHasNoHint() throws {
         let info = try AESCrypt.inspect(url: try fixture("v2-hello"))
         XCTAssertNil(info.passwordHint)
