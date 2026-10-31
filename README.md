@@ -73,8 +73,9 @@ open "dist/AES Open Crypt.app"
 
 `scripts/build-app.sh` builds release binaries, embeds `aesopen` at
 `Contents/Resources/bin/aesopen`, assembles the `.app` bundle, copies the
-icon, and ad-hoc signs the CLI and the app. `scripts/build-pkg.sh` wraps the
-app in an installer package. There is no Xcode project and no third-party
+icon, and ad-hoc signs the CLI and the app. It builds a universal binary
+(`arm64` + `x86_64`) by default; set `UNIVERSAL=0` for a host-only build.
+`scripts/build-pkg.sh` wraps the app in an installer package. There is no Xcode project and no third-party
 dependency. To rebuild the icon, run `swift scripts/make-icon.swift` and then
 `iconutil`.
 
