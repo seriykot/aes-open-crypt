@@ -25,7 +25,8 @@ struct ContentView: View {
                 finishedActions
             }
 
-            if !model.rows.isEmpty {
+            if !model.rows.isEmpty,
+               model.phase == .ready || (model.phase == .finished && hasFailedRows) {
                 form
             }
 
