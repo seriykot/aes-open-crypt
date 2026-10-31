@@ -54,6 +54,11 @@ struct ContentView: View {
                 focusPasswordSoon()
             }
         }
+        .onChange(of: model.passwordError) { error in
+            if error != nil {
+                focusPasswordSoon()
+            }
+        }
         .onAppear {
             if !model.rows.isEmpty, model.phase == .ready {
                 focusPasswordSoon()
@@ -231,6 +236,10 @@ struct ContentView: View {
             Image(systemName: "exclamationmark.triangle.fill")
                 .foregroundStyle(.orange)
                 .help("Failed")
+        case .wrongPassword:
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.orange)
+                .help("Wrong password")
         case .cancelled:
             Text("Cancelled")
                 .font(.caption)
@@ -258,7 +267,8 @@ struct ContentView: View {
                 title: "Password",
                 placeholder: model.mode == .decrypt ? "File password" : "Choose a password",
                 text: $model.password,
-                field: .password
+                field: .password,
+                error: model.passwordError
             )
 
             if model.mode == .encrypt {
@@ -317,7 +327,8 @@ struct ContentView: View {
         title: String,
         placeholder: String,
         text: Binding<String>,
-        field: Field
+        field: Field,
+        error: String? = nil
     ) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title)
@@ -354,6 +365,13 @@ struct ContentView: View {
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .strokeBorder(Color.primary.opacity(0.12))
             )
+
+            if let error {
+                Text(error)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 
@@ -397,18 +415,15 @@ struct ContentView: View {
                 model.clear()
             }
             Spacer()
-            if hasFailedRows {
-                Text("Enter a password to retry the failed files.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
         }
     }
 
     private var hasFailedRows: Bool {
         model.rows.contains { row in
-            if case .failed = row.status { return true }
-            return false
+            switch row.status {
+            case .failed, .wrongPassword: return true
+            case .pending, .running, .succeeded, .cancelled: return false
+            }
         }
     }
 

@@ -16,6 +16,7 @@ public final class BatchModel: ObservableObject {
         case running
         case succeeded
         case failed(String)
+        case wrongPassword
         case cancelled
     }
 
@@ -32,6 +33,7 @@ public final class BatchModel: ObservableObject {
     @Published public private(set) var phase: Phase = .idle
     @Published public private(set) var overallProgress: Double = 0
     @Published public private(set) var errorMessage: String?
+    @Published public private(set) var passwordError: String?
     @Published public private(set) var notice: String?
     @Published public private(set) var hasMixedInputs = false
 
@@ -147,6 +149,7 @@ public final class BatchModel: ObservableObject {
             phase = .ready
             overallProgress = 0
             errorMessage = nil
+            passwordError = nil
             notice = Self.unreadableDropMessage(unreadableCount)
         } catch {
             errorMessage = Self.message(for: error)
@@ -175,6 +178,7 @@ public final class BatchModel: ObservableObject {
         phase = .idle
         overallProgress = 0
         errorMessage = nil
+        passwordError = nil
         notice = nil
         password = ""
         confirmation = ""
@@ -205,8 +209,10 @@ public final class BatchModel: ObservableObject {
         guard phase == .finished || phase == .ready else { return }
 
         let failedRows = rows.filter { row in
-            if case .failed = row.status { return true }
-            return false
+            switch row.status {
+            case .failed, .wrongPassword: return true
+            case .pending, .running, .succeeded, .cancelled: return false
+            }
         }
         guard !failedRows.isEmpty else { return }
 
@@ -229,6 +235,8 @@ public final class BatchModel: ObservableObject {
         for row in rows {
             if case .failed = row.status, let item = items.next() {
                 newRows.append(Row(id: UUID(), item: item, status: .pending, fraction: 0))
+            } else if case .wrongPassword = row.status, let item = items.next() {
+                newRows.append(Row(id: UUID(), item: item, status: .pending, fraction: 0))
             } else {
                 newRows.append(row)
             }
@@ -249,7 +257,7 @@ public final class BatchModel: ObservableObject {
             switch rows[index].status {
             case .pending, .running:
                 rows[index].status = .cancelled
-            case .succeeded, .failed, .cancelled:
+            case .succeeded, .failed, .wrongPassword, .cancelled:
                 break
             }
         }
@@ -263,6 +271,7 @@ public final class BatchModel: ObservableObject {
         phase = .working
         overallProgress = 0
         errorMessage = nil
+        passwordError = nil
         notice = nil
 
         let password = self.password
@@ -342,6 +351,9 @@ public final class BatchModel: ObservableObject {
                 rows[index].fraction = 1
             case .some(.issue(let issue)):
                 rows[index].status = .failed(Self.message(for: issue))
+            case .some(.crypto(.wrongPassword)):
+                rows[index].status = .wrongPassword
+                passwordError = Self.message(for: AESCryptError.wrongPassword)
             case .some(.crypto(.cancelled)):
                 rows[index].status = .cancelled
             case .some(.crypto(let error)):
@@ -377,6 +389,7 @@ public final class BatchModel: ObservableObject {
         phase = .ready
         overallProgress = 0
         errorMessage = nil
+        passwordError = nil
     }
 
     private func refreshMixedFlag() {

@@ -148,7 +148,13 @@ final class BatchModelTests: XCTestCase {
 
         XCTAssertEqual(model.phase, .finished)
         XCTAssertEqual(model.rows[0].status, .succeeded)
-        XCTAssertTrue(isFailed(model.rows[1].status))
+        XCTAssertEqual(model.rows[1].status, .wrongPassword)
+        XCTAssertEqual(model.passwordError, "Wrong password. Try again.")
+
+        let plain = directory.appendingPathComponent("plain.txt")
+        try Data("plain\n".utf8).write(to: plain)
+        model.add(urls: [plain], preferredMode: nil)
+        XCTAssertNil(model.passwordError)
     }
 
     func testRetryFailedRunsOnlyFailedRows() async throws {
@@ -165,7 +171,7 @@ final class BatchModelTests: XCTestCase {
         await model.activeTask?.value
 
         XCTAssertEqual(model.rows[0].status, .succeeded)
-        XCTAssertTrue(isFailed(model.rows[1].status))
+        XCTAssertEqual(model.rows[1].status, .wrongPassword)
         let firstOutput = model.rows[0].item.output
         let firstOutputDate = try modificationDate(of: firstOutput)
 
@@ -175,6 +181,7 @@ final class BatchModelTests: XCTestCase {
 
         XCTAssertEqual(model.rows[0].status, .succeeded)
         XCTAssertEqual(model.rows[1].status, .succeeded)
+        XCTAssertNil(model.passwordError)
         XCTAssertEqual(try modificationDate(of: firstOutput), firstOutputDate)
     }
 
@@ -283,6 +290,30 @@ final class BatchModelTests: XCTestCase {
 
         XCTAssertTrue(model.rows.isEmpty)
         XCTAssertEqual(model.notice, "Could not read 3 of the dropped files.")
+    }
+
+    func testCorruptFileFailureDoesNotSetPasswordError() async throws {
+        let directory = try makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let encrypted = try makeEncryptedFile(in: directory, name: "secret", password: "apples")
+        let info = try AESCrypt.inspect(url: encrypted)
+        var bytes = try Data(contentsOf: encrypted)
+        bytes[Int(info.ciphertextOffset) + 1] ^= 0xFF
+        try bytes.write(to: encrypted)
+
+        let model = BatchModel()
+        model.add(urls: [encrypted], preferredMode: nil)
+        XCTAssertEqual(model.mode, .decrypt)
+        model.password = "apples"
+        XCTAssertTrue(model.canStart)
+
+        model.start()
+        await model.activeTask?.value
+
+        XCTAssertEqual(model.phase, .finished)
+        XCTAssertTrue(isFailed(model.rows[0].status))
+        XCTAssertNil(model.passwordError)
     }
 
     private func isFailed(_ status: BatchModel.RowStatus) -> Bool {
