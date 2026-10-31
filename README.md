@@ -35,8 +35,9 @@ sudo installer -pkg "AES Open Crypt 0.2.0.pkg" -target /
 - Drag up to 10 files onto the window, or use **Open File…** (⌘O).
 - `.aes` files open in decrypt mode; anything else opens in encrypt mode. A
   mixed drop asks whether to encrypt or decrypt the whole batch.
-- Finder Services open the same password window. Window drops accept data
-  files only; folders are rejected.
+- Finder Services open the same password window. Window drops accept regular
+  files only; folders and document packages such as `.rtfd` are rejected. Zip
+  a package first to encrypt it.
 - One password per batch. Every row reports its own result; if a row fails,
   fix the password and retry only the failed rows.
 - The app writes stream format 3 by default (AES Crypt 4.x and this app,

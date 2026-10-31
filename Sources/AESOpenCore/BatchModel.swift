@@ -467,7 +467,7 @@ public final class BatchModel: ObservableObject {
         case .tooManyFiles(let maximum):
             return "Maximum of \(maximum) files at a time is allowed."
         case .notAFile:
-            return "That item is a folder, not a file."
+            return "That item is a folder or document package, not a file. Zip it first to encrypt it."
         case .alreadyEncrypted:
             return "This file is already encrypted."
         case .notEncrypted:

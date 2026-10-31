@@ -659,7 +659,7 @@ private func issueText(_ issue: AESCryptBatchIssue) -> String {
     case .tooManyFiles(let maximum):
         return "Maximum of \(maximum) files at a time is allowed."
     case .notAFile:
-        return "This is a folder, not a file."
+        return "This is a folder or document package (like .rtfd), not a file. Zip it first to encrypt it."
     case .alreadyEncrypted:
         return "This file is already encrypted."
     case .notEncrypted:
