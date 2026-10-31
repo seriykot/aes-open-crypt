@@ -41,9 +41,11 @@ struct ContentView: View {
             Spacer(minLength: 0)
             footer
         }
-        .padding(24)
+        .padding(Theme.Metrics.windowPadding)
         .frame(width: 640, height: 720)
-        .background(Color(nsColor: .windowBackgroundColor))
+        .background(Theme.canvas)
+        .tint(Theme.accent)
+        .foregroundStyle(Theme.textPrimary)
         .onChange(of: model.rows.count) { count in
             if count > 0, model.phase == .ready {
                 focusPasswordSoon()
@@ -69,20 +71,26 @@ struct ContentView: View {
     private var header: some View {
         HStack(spacing: 12) {
             Image(systemName: "lock.shield.fill")
-                .font(.system(size: 25, weight: .medium))
-                .foregroundStyle(.tint)
+                .font(.system(size: 22, weight: .medium))
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(Theme.accent)
                 .frame(width: 44, height: 44)
                 .background(
-                    RoundedRectangle(cornerRadius: 11, style: .continuous)
-                        .fill(Color.accentColor.opacity(0.12))
+                    RoundedRectangle(cornerRadius: Theme.Metrics.iconTileRadius, style: .continuous)
+                        .fill(Theme.accentSoft)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: Theme.Metrics.iconTileRadius, style: .continuous)
+                                .strokeBorder(Theme.accentBorder, lineWidth: 1)
+                        )
                 )
 
             VStack(alignment: .leading, spacing: 2) {
                 Text("AES Open Crypt")
                     .font(.title2.weight(.semibold))
+                    .foregroundStyle(Theme.textPrimary)
                 Text("AES Crypt compatible encryption")
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Theme.textSecondary)
             }
 
             Spacer()
@@ -91,20 +99,20 @@ struct ContentView: View {
                 Button("Clear") {
                     model.clear()
                 }
-                .buttonStyle(.link)
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .tint(Theme.textSecondary)
             }
         }
     }
 
     private var fileArea: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(isTargeted ? Color.accentColor.opacity(0.10) : Color.primary.opacity(0.035))
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(
-                    isTargeted ? Color.accentColor : Color.primary.opacity(0.16),
-                    style: StrokeStyle(lineWidth: 1.5, dash: [6, 4])
-                )
+            RoundedRectangle(cornerRadius: Theme.Metrics.cardRadius, style: .continuous)
+                .fill(Theme.surface)
+                .shadow(color: Theme.shadow, radius: 12, y: 4)
+            RoundedRectangle(cornerRadius: Theme.Metrics.cardRadius, style: .continuous)
+                .strokeBorder(Theme.border, lineWidth: 1)
 
             if model.rows.isEmpty {
                 emptyDropZone
@@ -119,21 +127,46 @@ struct ContentView: View {
     }
 
     private var emptyDropZone: some View {
-        VStack(spacing: 10) {
-            Image(systemName: "arrow.down.doc")
-                .font(.system(size: 32, weight: .light))
-                .foregroundStyle(.secondary)
-            Text("Drop up to 10 files here")
-                .font(.headline)
-            Text("Plain files are encrypted. .aes files are decrypted.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            Button("Choose Files…") {
-                openFiles()
+        ZStack {
+            if isTargeted {
+                RoundedRectangle(cornerRadius: Theme.Metrics.cardRadius - 4, style: .continuous)
+                    .fill(Theme.accentSoft)
+                    .padding(8)
             }
-            .buttonStyle(.link)
+
+            RoundedRectangle(cornerRadius: Theme.Metrics.cardRadius - 4, style: .continuous)
+                .strokeBorder(
+                    isTargeted ? Theme.accent : Theme.borderStrong,
+                    style: StrokeStyle(lineWidth: 1.5, dash: [6, 5])
+                )
+                .padding(8)
+
+            VStack(spacing: 10) {
+                Image(systemName: "arrow.down.doc")
+                    .font(.system(size: 24, weight: .regular))
+                    .symbolRenderingMode(.hierarchical)
+                    .foregroundStyle(Theme.accent)
+                    .frame(width: 52, height: 52)
+                    .background(Circle().fill(Theme.accentSoft))
+
+                Text("Drop files here")
+                    .font(.headline)
+                    .foregroundStyle(Theme.textPrimary)
+
+                Text("Up to 10 files. Plain files are encrypted, .aes files are decrypted.")
+                    .font(.caption)
+                    .foregroundStyle(Theme.textSecondary)
+                    .multilineTextAlignment(.center)
+
+                Button("Choose Files…") {
+                    openFiles()
+                }
+                .buttonStyle(.bordered)
+                .tint(Theme.accent)
+            }
+            .padding(20)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var fileList: some View {
