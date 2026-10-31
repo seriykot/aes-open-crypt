@@ -7,3 +7,4 @@ Tests/Fixtures/private/
 xcuserdata/
 App/AppIcon.iconset/
 dist/
+.commandcode/
