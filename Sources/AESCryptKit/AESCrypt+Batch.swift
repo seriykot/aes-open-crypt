@@ -289,6 +289,7 @@ extension AESCryptBatch {
         password: String,
         format: AESFormatVersion = .v2,
         iterations: UInt32 = 600_000,
+        hint: String? = nil,
         progress: ((AESCryptBatchProgress) -> Void)? = nil,
         isCancelled: @escaping () -> Bool = { false }
     ) -> [AESCryptBatchResult] {
@@ -334,6 +335,7 @@ extension AESCryptBatch {
                         password: password,
                         format: format,
                         iterations: iterations,
+                        hint: hint,
                         progress: handler,
                         isCancelled: isCancelled
                     )

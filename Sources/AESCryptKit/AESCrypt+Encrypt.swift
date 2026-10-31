@@ -9,6 +9,7 @@ extension AESCrypt {
         password: String,
         format: AESFormatVersion = .v2,
         iterations: UInt32 = 600_000,
+        hint: String? = nil,
         progress: AESCryptProgressHandler? = nil,
         isCancelled: () -> Bool = { false }
     ) throws {
@@ -56,15 +57,15 @@ extension AESCrypt {
 
         var header = Data([0x41, 0x45, 0x53, format.rawValue, 0x00])
         let createdBy = Data("aes-open-crypt 0.2.0".utf8)
-        var extensionBody = Data("CREATED_BY".utf8)
-        extensionBody.append(0)
-        extensionBody.append(createdBy)
-        guard extensionBody.count <= 0xFFFF else {
-            throw AESCryptError.corrupt("extension is too large")
+        header.append(try extensionBlock(identifier: "CREATED_BY", value: createdBy))
+        if let hint = normalizedHint(hint) {
+            header.append(
+                try extensionBlock(
+                    identifier: AESPasswordHint.extensionIdentifier,
+                    value: Data(hint.utf8)
+                )
+            )
         }
-        header.append(UInt8((extensionBody.count >> 8) & 0xFF))
-        header.append(UInt8(extensionBody.count & 0xFF))
-        header.append(extensionBody)
         header.append(contentsOf: [0x00, 0x00])
         if format == .v3 {
             header.append(UInt8((iterations >> 24) & 0xFF))
@@ -152,6 +153,24 @@ extension AESCrypt {
             ofItemAtPath: outputURL.path
         )
     }
+}
+
+private func normalizedHint(_ hint: String?) -> String? {
+    guard let hint else { return nil }
+    let trimmed = hint.trimmingCharacters(in: .whitespacesAndNewlines)
+    return trimmed.isEmpty ? nil : trimmed
+}
+
+private func extensionBlock(identifier: String, value: Data) throws -> Data {
+    var body = Data(identifier.utf8)
+    body.append(0)
+    body.append(value)
+    guard body.count <= 0xFFFF else {
+        throw AESCryptError.corrupt("extension is too large")
+    }
+    var block = Data([UInt8((body.count >> 8) & 0xFF), UInt8(body.count & 0xFF)])
+    block.append(body)
+    return block
 }
 
 private func randomData(_ count: Int) throws -> Data {
