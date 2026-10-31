@@ -21,6 +21,9 @@ public enum AESCrypt {
         guard let version = AESFormatVersion(rawValue: header[3]) else {
             throw AESCryptError.unsupportedVersion(header[3])
         }
+        if version != .v0, header[4] != 0 {
+            throw AESCryptError.corrupt("reserved header byte is nonzero")
+        }
 
         var offset: Int64 = 5
         var extensions: [AESExtension] = []
