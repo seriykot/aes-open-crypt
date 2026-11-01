@@ -8,9 +8,10 @@
   <img src="docs/assets/app-screenshot.png" width="800" alt="AES Open Crypt with files ready to decrypt and a matrix animation during decryption">
 </p>
 
-Open-source macOS app and CLI for AES Crypt `.aes` files. Reads stream formats
-0–3 and writes format 3 by default or format 2 for older AES Crypt versions.
-No telemetry, network access, or password storage.
+AES Crypt-compatible file encryption for macOS—no cloud, no drama, and no
+password sticky notes. The app and CLI read stream formats 0–3 and write
+format 3 by default or format 2 for older AES Crypt versions. No telemetry or
+network access.
 
 <p align="center">
   <a href="https://github.com/seriykot/aes-open-crypt/releases/tag/v0.2.0"><img src="https://img.shields.io/badge/release-v0.2.0-286b57" alt="Release 0.2.0"></a>
