@@ -42,9 +42,9 @@ or block launch.
 
 - **AES Crypt versions:** 3.14 command-line tool and 4.7.0. Cross-checks cover
   format 2 with 3.14, and formats 2 and 3 with 4.7.0.
-- **Fixtures:** 84 known-answer vectors (21 per stream format 0–3), the
-  official format 3 `hello_world.txt` sample, and `.aes` files produced by
-  AES Crypt 3.14.
+- **Fixtures:** 84 known-answer vectors (21 per stream format 0–3), a
+  project-generated format 3 sample, and `.aes` files produced by AES Crypt
+  3.14.
 - **Real-world files:** encrypted and decrypted 11 local files, with exact
   matches and originals unchanged: 1 DOC, 2 DOCX, 3 PDF, 1 JPG, 1 RTF,
   2 ZIP, and 1 MP4. Private filenames and file contents are not published.

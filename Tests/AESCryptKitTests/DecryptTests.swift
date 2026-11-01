@@ -46,7 +46,7 @@ final class DecryptTests: XCTestCase {
     }
 
     func testTamperedV3CiphertextFailsAuthenticationAndWritesNothing() throws {
-        try assertTamperedCiphertextFailsAuthenticationAndWritesNothing(fixtureName: "v3-hello")
+        try assertTamperedCiphertextFailsAuthenticationAndWritesNothing(fixtureName: "v3-test-data")
     }
 
     func testV2ModuloByteIsUnauthenticatedAndDoesNotModifySource() throws {
@@ -105,9 +105,9 @@ final class DecryptTests: XCTestCase {
         )
     }
 
-    func testDecryptsOfficialV3Sample() throws {
-        let output = try decrypt("v3-hello", password: "apples")
-        XCTAssertEqual(try Data(contentsOf: output), Data("Hello, World!\n".utf8))
+    func testDecryptsProjectGeneratedV3Fixture() throws {
+        let output = try decrypt("v3-test-data", password: "apples")
+        XCTAssertEqual(try Data(contentsOf: output), Data("AES Open Crypt test fixture.\n".utf8))
     }
 
     private func decrypt(_ name: String, password: String) throws -> URL {

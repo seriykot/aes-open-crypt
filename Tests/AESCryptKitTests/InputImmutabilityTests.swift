@@ -19,7 +19,7 @@ final class InputImmutabilityTests: XCTestCase {
     }
 
     func testDecryptV3LeavesInputUnchanged() throws {
-        try assertDecryptLeavesInputUnchanged(fixtureName: "v3-hello")
+        try assertDecryptLeavesInputUnchanged(fixtureName: "v3-test-data")
     }
 
     func testWrongPasswordLeavesInputUnchanged() throws {

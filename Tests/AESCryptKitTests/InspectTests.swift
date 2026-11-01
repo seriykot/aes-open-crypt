@@ -84,7 +84,7 @@ final class InspectTests: XCTestCase {
         case 2:
             return try Data(contentsOf: fixture("v2-hello"))
         case 3:
-            return try Data(contentsOf: fixture("v3-hello"))
+            return try Data(contentsOf: fixture("v3-test-data"))
         default:
             throw XCTSkip("Only versions 1 through 3 have a reserved header byte")
         }
