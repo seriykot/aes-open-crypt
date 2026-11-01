@@ -118,6 +118,25 @@ final class BatchModelTests: XCTestCase {
         XCTAssertNil(model.sharedDecryptHint)
     }
 
+    func testSingleHintIsShownPerRowWhenAnotherDecryptFileHasNoHint() throws {
+        let directory = try makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let hinted = try makeEncryptedFile(
+            in: directory, name: "hinted", password: "apples", hint: "garden"
+        )
+        let unhinted = try makeEncryptedFile(
+            in: directory, name: "unhinted", password: "apples"
+        )
+
+        let model = BatchModel()
+        model.add(urls: [hinted, unhinted], preferredMode: .decrypt)
+
+        XCTAssertEqual(model.decryptHints, ["garden"])
+        XCTAssertNil(model.sharedDecryptHint)
+        XCTAssertTrue(model.showsPerRowDecryptHints)
+    }
+
     func testDecryptHintsIgnoreEncryptRowsAndClearResetsHint() throws {
         let directory = try makeDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }

@@ -155,8 +155,9 @@ still decrypt the file.
   password); format 3 uses PBKDF2-HMAC-SHA512 with the IV as salt.
 - Format 2 does not authenticate the final size-modulo-16 byte. An attacker
   with write access to a `.aes` file can change the decrypted length by up to
-  15 bytes. This is part of the format, not this implementation. Use format 3
-  when you control both ends.
+  15 bytes; this is inherent to the format and cannot be fixed compatibly.
+  Use format 3 when you control both ends. A regression test demonstrates the
+  behavior using a disposable copy of a fixture.
 - CBC with a random IV per file, plus a random session key wrapped under the
   password-derived key. The header and payload each carry an HMAC-SHA256.
 - Password hints are plaintext extension tags. They are neither encrypted nor

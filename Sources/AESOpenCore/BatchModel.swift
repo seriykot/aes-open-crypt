@@ -101,10 +101,26 @@ public final class BatchModel: ObservableObject {
         return hints
     }
 
+    /// Whether each decrypt row has a hint and they all agree on one value.
+    public var hasSharedDecryptHint: Bool {
+        let decryptRows = rows.filter { $0.item.mode == .decrypt }
+        guard !decryptRows.isEmpty,
+              decryptRows.allSatisfy({ $0.item.info?.passwordHint != nil }) else {
+            return false
+        }
+        return Set(decryptRows.compactMap { $0.item.info?.passwordHint }).count == 1
+    }
+
+    /// Whether row labels are needed because decrypt rows have different or
+    /// partially missing hints.
+    public var showsPerRowDecryptHints: Bool {
+        decryptHints.count > 1 || (decryptHints.count == 1 && !hasSharedDecryptHint)
+    }
+
     /// The hint under the password field when every decrypt row agrees on one.
     public var sharedDecryptHint: String? {
-        let hints = decryptHints
-        return hints.count == 1 ? hints[0] : nil
+        guard hasSharedDecryptHint else { return nil }
+        return decryptHints.first
     }
 
     public var completedOutputs: [URL] {

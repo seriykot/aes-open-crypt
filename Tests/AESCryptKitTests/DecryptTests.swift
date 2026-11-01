@@ -42,15 +42,54 @@ final class DecryptTests: XCTestCase {
     }
 
     func testTamperedCiphertextFailsAuthenticationAndWritesNothing() throws {
-        let input = try fixture("v2-hello")
+        try assertTamperedCiphertextFailsAuthenticationAndWritesNothing(fixtureName: "v2-hello")
+    }
+
+    func testTamperedV3CiphertextFailsAuthenticationAndWritesNothing() throws {
+        try assertTamperedCiphertextFailsAuthenticationAndWritesNothing(fixtureName: "v3-hello")
+    }
+
+    func testV2ModuloByteIsUnauthenticatedAndDoesNotModifySource() throws {
+        let fixtureURL = try fixture("v2-hello")
+        let sourceBefore = try Data(contentsOf: fixtureURL)
+        let input = temporaryOutput("v2-modulo-copy-\(UUID().uuidString).aes")
+        let output = temporaryOutput("v2-modulo-out-\(UUID().uuidString)")
+        try sourceBefore.write(to: input)
+        defer {
+            try? FileManager.default.removeItem(at: input)
+            try? FileManager.default.removeItem(at: output)
+        }
+
+        let info = try AESCrypt.inspect(url: input)
+        let original = try Data(contentsOf: input)
+        let moduloOffset = Int(info.ciphertextOffset + info.ciphertextLength)
+        XCTAssertEqual(original[moduloOffset] & 0x0F, 14)
+        var mutated = original
+        mutated[moduloOffset] = 15
+        try mutated.write(to: input)
+
+        try AESCrypt.decrypt(url: input, to: output, password: "apples")
+
+        let originalPlaintext = Data("Hello, World!\n".utf8)
+        let decrypted = try Data(contentsOf: output)
+        XCTAssertEqual(decrypted.count, originalPlaintext.count + 1)
+        XCTAssertEqual(decrypted.prefix(originalPlaintext.count), originalPlaintext)
+        XCTAssertEqual(try Data(contentsOf: input), mutated)
+        XCTAssertEqual(try Data(contentsOf: fixtureURL), sourceBefore)
+    }
+
+    private func assertTamperedCiphertextFailsAuthenticationAndWritesNothing(
+        fixtureName: String
+    ) throws {
+        let input = try fixture(fixtureName)
         let info = try AESCrypt.inspect(url: input)
         var bytes = try Data(contentsOf: input)
         let ciphertextOffset = Int(info.ciphertextOffset)
         bytes[ciphertextOffset + 1] ^= 0xFF
-        let tampered = temporaryOutput()
+        let tampered = temporaryOutput("tampered-\(fixtureName)-\(UUID().uuidString).aes")
         try bytes.write(to: tampered)
 
-        let output = temporaryOutput()
+        let output = temporaryOutput("tampered-out-\(UUID().uuidString)")
         defer {
             try? FileManager.default.removeItem(at: tampered)
             try? FileManager.default.removeItem(at: output)
@@ -60,6 +99,10 @@ final class DecryptTests: XCTestCase {
             XCTAssertEqual(error as? AESCryptError, .authenticationFailed)
         }
         XCTAssertFalse(FileManager.default.fileExists(atPath: output.path))
+        XCTAssertFalse(
+            FileManager.default.fileExists(atPath: output.deletingLastPathComponent()
+                .appendingPathComponent(".aesopen-\(UUID().uuidString).tmp").path)
+        )
     }
 
     func testDecryptsOfficialV3Sample() throws {

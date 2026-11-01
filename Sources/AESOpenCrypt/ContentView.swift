@@ -205,20 +205,23 @@ struct ContentView: View {
     }
 
     private var fileList: some View {
-        ScrollView {
-            LazyVStack(spacing: 2) {
-                ForEach(model.rows) { row in
-                    FileRowView(
-                        row: row,
-                        phase: model.phase,
-                        showsHint: model.decryptHints.count > 1,
-                        onRemove: { model.remove(row.id) }
-                    )
+        GeometryReader { geometry in
+            ScrollView {
+                LazyVStack(spacing: 2) {
+                    ForEach(model.rows) { row in
+                        FileRowView(
+                            row: row,
+                            phase: model.phase,
+                            showsHint: model.showsPerRowDecryptHints,
+                            onRemove: { model.remove(row.id) }
+                        )
+                    }
                 }
+                .padding(.vertical, 6)
             }
-            .padding(.vertical, 6)
+            .padding(6)
+            .frame(height: geometry.size.height, alignment: .top)
         }
-        .padding(6)
     }
 
     private var form: some View {
@@ -264,7 +267,7 @@ struct ContentView: View {
 
                 hintField
 
-                VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 8) {
                     HStack(spacing: 4) {
                         Text("Format")
                             .font(.caption.weight(.medium))
@@ -284,12 +287,16 @@ struct ContentView: View {
                             .accessibilityLabel("Format help")
                             .accessibilityHint("Compatible v2 opens in every AES Crypt release. Strong v3 uses stronger password hashing and needs AES Crypt 4.x.")
                     }
+                    .fixedSize()
+
                     Picker("Format", selection: $model.format) {
                         Text("Compatible (v2)").tag(AESFormatVersion.v2)
                         Text("Strong (v3)").tag(AESFormatVersion.v3)
                     }
                     .pickerStyle(.segmented)
                     .labelsHidden()
+                    .frame(maxWidth: 300)
+                    .layoutPriority(1)
                 }
             }
 
@@ -422,10 +429,10 @@ struct ContentView: View {
                 HStack(alignment: .top, spacing: 5) {
                     Image(systemName: "info.circle")
                         .font(.caption)
-                    Text("Hint: \(hint)")
+                    Text("Hint: \(AESPasswordHint.displayText(hint))")
                         .font(.caption)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .textSelection(.enabled)
+                        .lineLimit(2)
+                        .truncationMode(.tail)
                 }
                 .foregroundStyle(Theme.info)
             }
@@ -759,11 +766,11 @@ private struct FileRowView: View {
                 .foregroundStyle(Theme.textSecondary)
 
                 if showsHint, let hint = row.item.info?.passwordHint {
-                    Text("Hint: \(hint)")
+                    Text("Hint: \(AESPasswordHint.displayText(hint))")
                         .font(.caption)
                         .foregroundStyle(Theme.info)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .textSelection(.enabled)
+                        .lineLimit(2)
+                        .truncationMode(.tail)
                 }
 
                 if case .failed(let message) = row.status {

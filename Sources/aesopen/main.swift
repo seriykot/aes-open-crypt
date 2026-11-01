@@ -373,7 +373,7 @@ private func showInfo(urls: [URL], options: Options) -> Int32 {
 
 private func printInfo(_ url: URL) throws {
     let info = try AESCrypt.inspect(url: url)
-    print("file: \(url.path)")
+    print("file: \(AESPasswordHint.terminalSafeText(url.path))")
     print("stream format: \(info.version.rawValue)")
     print("size: \(info.fileSize) bytes")
     print("ciphertext: \(info.ciphertextLength) bytes")
@@ -381,7 +381,7 @@ private func printInfo(_ url: URL) throws {
         print("kdf iterations: \(iterations)")
     }
     if let hint = info.passwordHint {
-        print("password hint: \(hint)")
+        print("password hint: \(AESPasswordHint.terminalSafeText(hint))")
     }
     let otherExtensions = info.extensions.filter {
         !$0.identifier.isEmpty && $0.identifier != AESPasswordHint.extensionIdentifier
@@ -390,7 +390,8 @@ private func printInfo(_ url: URL) throws {
         print("extensions:")
         for item in otherExtensions {
             let value = String(data: item.value, encoding: .utf8) ?? "<binary>"
-            print("  \(item.identifier) = \(value)")
+            let identifier = AESPasswordHint.terminalSafeText(item.identifier)
+            print("  \(identifier) = \(AESPasswordHint.terminalSafeText(value))")
         }
     }
 }
@@ -446,7 +447,7 @@ private func emit(_ results: [AESCryptBatchResult], command: String, options: Op
         if let failure = result.failure {
             writeError(url: result.item.input, message: describe(failure).message)
         } else {
-            print(result.item.output.path)
+            print(AESPasswordHint.terminalSafeText(result.item.output.path))
         }
     }
 }
@@ -483,8 +484,10 @@ private func printJSON(_ object: [String: Any]) {
 }
 
 private func writeError(url: URL, message: String) {
+    let safePath = AESPasswordHint.terminalSafeText(url.path)
+    let safeMessage = AESPasswordHint.terminalSafeText(message)
     FileHandle.standardError.write(
-        Data("aesopen: \(url.path): \(message)\n".utf8)
+        Data("aesopen: \(safePath): \(safeMessage)\n".utf8)
     )
 }
 

@@ -209,8 +209,8 @@ Intel Mac with macOS 13 or later. It is the only way to test the native
    Expected:
 
    ```
-   4bb6afd4d6b43578ec0925c2e41cd6d93a89cc65a315e55b40efadd37913e172  AES Open Crypt 0.2.0.pkg
-   4f96f5d1e76e3365c4b7d4c2a264eeee8772b71a4575c5dac9e7e439e43e83f1  AES Open Crypt 0.2.0.zip
+   04602aedc3d24b08cb33f0e8fc53d47b2426d6d49cdd8820da72db033ae5918e  AES Open Crypt 0.2.0.pkg
+   4f57298e6900416881d0d523d945b2f5e2e1c9c43df06b0cedb12d3ae9f5d805  AES Open Crypt 0.2.0.zip
    ```
 
 2. Install the package. If Gatekeeper blocks it, right-click and choose
@@ -257,7 +257,27 @@ Intel Mac with macOS 13 or later. It is the only way to test the native
    hinted file still decrypts because AES Crypt 3.14 ignores the unknown URI
    extension.
 
-5. Zip first launch: quit the app, unzip the portable build, move it to
+5. AES Crypt 4.7 cross-check. Use the `aescrypt` executable from the
+   `aescrypt_cli-4.7.0-Darwin-arm64` bundle. Repeat the encrypt/decrypt and
+   `cmp` checks for v2 and v3, both with and without `--hint "cross-check hint"`.
+
+   Expected: AES Crypt 4.7 decrypts all four files and every `cmp` is silent.
+   The hint is an unknown URI extension to AES Crypt 4.7 and does not change
+   the decrypted bytes.
+
+6. Header integrity checks (disposable copies only). Flip byte 4 in valid v1,
+   v2, and v3 files: inspect/decrypt reject each; no output or `.aesopen-*`
+   file remains. A v0 file uses byte 4 as its modulo field and must continue to
+   parse/decrypt according to v0 behavior.
+
+   For a disposable v2 copy, change only the final modulo byte from 14 to 15.
+   Expected: decrypt still passes the ciphertext HMAC and returns the original
+   plaintext prefix plus one extra byte. This is the documented v2 format
+   limitation; do not “fix” it by changing v2 compatibility. Repeat a
+   ciphertext-byte mutation on v3: authentication fails and no output is
+   created.
+
+7. Zip first launch: quit the app, unzip the portable build, move it to
    `~/Applications`, and launch it. Follow the expected link behavior in
    section 8.
 
@@ -284,13 +304,14 @@ Run on a real desktop in both light and dark mode (System Settings → Appearanc
 3. **Drag the window.** Click an empty part of the background and drag.
    Expected: the window moves without a title bar.
 
-4. **Palette.** In light and dark mode, check the header, password fields,
-   format picker, primary button, status pills, and footer. Expected: a deep
+4. **Palette and Format control.** In light and dark mode, check the header,
+   password fields, primary button, status pills, and footer. Expected: a deep
    muted teal accent, no stock bright blue, readable secondary text, and
    visible borders. The row remove button is a muted red and the success
-   check a brighter green. Hover the question mark next to **Format** to see
-   the v2/v3 explanation. Run `swift test --filter ThemePaletteTests` to check
-   the contrast floors.
+   check a brighter green. **Format**, its question mark, and the v2/v3
+   segments appear on one line without clipping at minimum or default window
+   width. Hover the question mark to see the format explanation. Run
+   `swift test --filter ThemePaletteTests` to check the contrast floors.
 
 5. **Batch states.** Check each state in both modes: empty; one file; ten
    files; mixed batch (mode picker); working with percent; cancel; finished
@@ -320,9 +341,16 @@ Run on a real desktop in both light and dark mode (System Settings → Appearanc
    add the output back for decryption. Expected: the hint appears under the
    password field before you type; it stays visible with the wrong-password
    error and Retry; with two files that have different hints, each row shows
-   its own. `aesopen info <file>` prints `password hint: garden gate`, and
-   `info --json` includes a `hint` field. The CLI rejects `--hint` on decrypt
-   and hints over 256 characters. Hints are plaintext and unauthenticated.
+   its own. Also test one hinted and one unhinted file: only the hinted row
+   shows a hint, with no shared hint under the password field. Import a
+   disposable file with a 20,000-character hint: the full hint remains
+   readable via `aesopen info --json`, while the UI is bounded to two lines
+   with a truncation marker and the controls remain in the window.
+   Put ESC/newline/tab characters in a disposable hint: human-readable
+   `aesopen info` prints visible `\\u{…}` / `\\n` / `\\t` escapes, JSON keeps
+   the exact value, and no raw terminal controls are emitted. The CLI rejects
+   `--hint` on decrypt and hints over 256 characters. Hints are plaintext and
+   unauthenticated.
 
 9. **Running overlay.** Start a batch with a small file and with a large file
    (a few hundred MB). Expected: a matrix-style rain in the icon's teal-green

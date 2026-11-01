@@ -213,6 +213,53 @@ final class PasswordHintTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: decrypted), plaintext)
     }
 
+    func testPasswordHintDisplayBoundsUnicodeScalarsAndMarksTruncation() {
+        let short = "clé 🔐"
+        XCTAssertEqual(AESPasswordHint.displayText(short), short)
+
+        let long = String(repeating: "界", count: 20_000)
+        let displayed = AESPasswordHint.displayText(long)
+        XCTAssertEqual(displayed.unicodeScalars.count, 256)
+        XCTAssertTrue(displayed.hasSuffix("…"))
+        XCTAssertEqual(displayed.unicodeScalars.dropLast().count, 255)
+    }
+
+    func testPasswordHintDisplayCanUseSmallerPresentationLimit() {
+        XCTAssertEqual(
+            AESPasswordHint.displayText("abcdef", maximumScalars: 4),
+            "abc…"
+        )
+        XCTAssertEqual(AESPasswordHint.displayText("abc", maximumScalars: 4), "abc")
+    }
+
+    func testTerminalSafeHintEscapesControlCharactersWithoutChangingPrintableText() {
+        let value = "start\u{001B}[2J\nnext\t\u{0085}end"
+        let safe = AESPasswordHint.terminalSafeText(value)
+
+        XCTAssertEqual(safe, "start\\u{001B}[2J\\nnext\\t\\u{0085}end")
+        XCTAssertFalse(safe.unicodeScalars.contains { $0.value < 0x20 || (0x7F...0x9F).contains($0.value) })
+        XCTAssertEqual(AESPasswordHint.terminalSafeText("garden gate"), "garden gate")
+    }
+
+    func testPasswordHintRemainsFullInFileInfoButPresentationIsBounded() throws {
+        let originalHint = String(repeating: "界", count: 20_000)
+        let files = try encryptedFile(Data("payload integrity".utf8), format: .v2, hint: originalHint)
+        let output = temporaryOutput("long-hint-presentation-\(UUID().uuidString)")
+        defer {
+            cleanUp(files.input, files.output)
+            try? FileManager.default.removeItem(at: output)
+        }
+
+        let info = try AESCrypt.inspect(url: files.output)
+        XCTAssertEqual(info.passwordHint, originalHint)
+        let shown = AESPasswordHint.displayText(try XCTUnwrap(info.passwordHint))
+        XCTAssertEqual(shown.unicodeScalars.count, AESPasswordHint.maximumDisplayScalars)
+        XCTAssertTrue(shown.hasSuffix("…"))
+
+        try AESCrypt.decrypt(url: files.output, to: output, password: "apples")
+        XCTAssertEqual(try Data(contentsOf: output), Data("payload integrity".utf8))
+    }
+
     func testFixtureContainerExtensionHasNoHint() throws {
         let info = try AESCrypt.inspect(url: try fixture("v2-hello"))
         XCTAssertNil(info.passwordHint)

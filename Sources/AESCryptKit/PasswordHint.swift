@@ -13,6 +13,36 @@ public enum AESPasswordHint {
 
     /// Product limit for the UI and CLI. The format itself allows much more.
     public static let maximumLength = 256
+    public static let maximumDisplayScalars = 256
+
+    /// Bound text shown in the UI without changing the stored hint.
+    public static func displayText(_ hint: String, maximumScalars: Int = maximumDisplayScalars) -> String {
+        guard maximumScalars > 0 else { return "" }
+        let scalars = hint.unicodeScalars
+        guard scalars.count > maximumScalars else { return hint }
+        return String(String.UnicodeScalarView(scalars.prefix(maximumScalars - 1))) + "…"
+    }
+
+    /// Make untrusted hint text safe for a terminal while preserving its value
+    /// visibly. JSON output should use JSON serialization instead.
+    public static func terminalSafeText(_ text: String) -> String {
+        var result = String()
+        for scalar in text.unicodeScalars {
+            switch scalar.value {
+            case 0x09:
+                result += "\\t"
+            case 0x0A:
+                result += "\\n"
+            case 0x0D:
+                result += "\\r"
+            case 0x00...0x1F, 0x7F...0x9F:
+                result += String(format: "\\u{%04X}", scalar.value)
+            default:
+                result.unicodeScalars.append(scalar)
+            }
+        }
+        return result
+    }
 }
 
 public extension AESFileInfo {

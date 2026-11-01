@@ -222,6 +222,55 @@ LONG_HINT="$(python3 -c 'print("a" * 300)')"
 run_expect 1 "$BIN" encrypt --password "$PW" --hint "$LONG_HINT" "$WORK/hint/h.txt"
 ok "password hints round trip, appear in info, and are encrypt-only"
 
+printf 'terminal payload\\n' >"$WORK/hint/terminal.txt"
+TERMINAL_HINT=$(printf 'visible\033[2J\nnext\tend')
+run_expect 0 "$BIN" encrypt --password "$PW" --hint "$TERMINAL_HINT" "$WORK/hint/terminal.txt"
+run_expect 0 "$BIN" info "$WORK/hint/terminal.txt.aes"
+grep -Fq 'password hint: visible\u{001B}[2J\nnext\tend' "$WORK/stdout" \
+    || fail "info did not visibly escape terminal controls"
+python3 - "$WORK/stdout" <<'PY' || fail "info output contains terminal control bytes"
+import pathlib, sys
+text = pathlib.Path(sys.argv[1]).read_bytes()
+assert not any((byte < 0x20 and byte != 0x0A) or 0x7F <= byte <= 0x9F for byte in text), repr(text)
+PY
+run_expect 0 "$BIN" info --json "$WORK/hint/terminal.txt.aes"
+EXPECTED_HINT="$TERMINAL_HINT" python3 - "$WORK/stdout" <<'PY' || fail "info --json changed the terminal-control hint"
+import json, os, sys
+doc = json.load(open(sys.argv[1]))
+assert doc["results"][0]["hint"] == os.environ["EXPECTED_HINT"], doc
+PY
+ok "info escapes terminal controls while JSON preserves the hint"
+
+CONTROL_NAME="control$(printf '\033')name.aes"
+cp "$WORK/hint/terminal.txt.aes" "$WORK/hint/$CONTROL_NAME"
+run_expect 0 "$BIN" info "$WORK/hint/$CONTROL_NAME"
+python3 - "$WORK/stdout" <<'PY' || fail "info output contains a raw control character in the file path"
+import pathlib, sys
+text = pathlib.Path(sys.argv[1]).read_bytes()
+assert not any((byte < 0x20 and byte != 0x0A) or 0x7F <= byte <= 0x9F for byte in text), repr(text)
+assert b"control\\u{001B}name.aes" in text, repr(text)
+PY
+ok "info escapes terminal controls in file paths"
+
+CONTROL_INPUT="control$(printf '\033')name.txt"
+printf 'path control payload\\n' >"$WORK/hint/$CONTROL_INPUT"
+run_expect 0 "$BIN" encrypt --password "$PW" "$WORK/hint/$CONTROL_INPUT"
+python3 - "$WORK/stdout" <<'PY' || fail "encrypt output path contains raw controls"
+import pathlib, sys
+text = pathlib.Path(sys.argv[1]).read_bytes()
+assert b"control\\u{001B}name.txt.aes" in text, repr(text)
+assert not any((byte < 0x20 and byte != 0x0A) or 0x7F <= byte <= 0x9F for byte in text), repr(text)
+PY
+MISSING_INPUT="missing$(printf '\033')name.txt"
+run_expect 5 "$BIN" encrypt --password "$PW" "$WORK/hint/$MISSING_INPUT"
+python3 - "$WORK/stderr" <<'PY' || fail "error output path contains raw controls"
+import pathlib, sys
+text = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8")
+assert text.count(r"missing\u{001B}name.txt") == 2, repr(text)
+assert not any((ord(char) < 0x20 and char != "\n") or 0x7F <= ord(char) <= 0x9F for char in text), repr(text)
+PY
+ok "encrypt and error output escape terminal controls in file paths"
+
 # ---------------------------------------------------------------- Unicode
 
 mkdir -p "$WORK/unicode" "$WORK/unicode/out"
