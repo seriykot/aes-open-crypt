@@ -1,0 +1,94 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="420" viewBox="0 0 1600 420">
+  <defs>
+    <linearGradient id="field" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#102426"/>
+      <stop offset=".52" stop-color="#193534"/>
+      <stop offset="1" stop-color="#0d1d20"/>
+    </linearGradient>
+    <linearGradient id="glass" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#d9eee5"/>
+      <stop offset="1" stop-color="#8eb8aa"/>
+    </linearGradient>
+    <radialGradient id="halo">
+      <stop offset="0" stop-color="#6eaa96" stop-opacity=".18"/>
+      <stop offset="1" stop-color="#6eaa96" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="grid" width="44" height="44" patternUnits="userSpaceOnUse">
+      <path d="M44 0H0V44" fill="none" stroke="#c5e0d6" stroke-opacity=".055" stroke-width="1"/>
+      <circle cx="2" cy="2" r="1.5" fill="#b5d7ca" fill-opacity=".12"/>
+    </pattern>
+  </defs>
+  <rect width="1600" height="420" rx="28" fill="url(#field)"/>
+  <rect width="1600" height="420" rx="28" fill="url(#grid)"/>
+  <ellipse cx="432" cy="214" rx="330" ry="260" fill="url(#halo)"/>
+  <path d="M0 338H1600M0 82H1600" stroke="#c5e0d6" stroke-opacity=".08"/>
+  <path d="M86 0V420M1514 0V420" stroke="#c5e0d6" stroke-opacity=".06"/>
+
+  <g fill="none" stroke="#b8d7cb" stroke-opacity=".24">
+    <circle cx="432" cy="210" r="153" stroke-dasharray="1 9"/>
+    <circle cx="432" cy="210" r="178" stroke-opacity=".1"/>
+  </g>
+  <g fill="#a9d2c2" fill-opacity=".42">
+    <circle cx="432" cy="32" r="2.5"/>
+    <circle cx="610" cy="210" r="2.5"/>
+    <circle cx="432" cy="388" r="2.5"/>
+    <circle cx="254" cy="210" r="2.5"/>
+  </g>
+
+  <g transform="translate(347 125)">
+    <rect width="170" height="170" rx="42" fill="#d8e9e2" fill-opacity=".08"
+          stroke="#c4e6d8" stroke-opacity=".55" stroke-width="1.5"/>
+    <rect x="13" y="13" width="144" height="144" rx="33" fill="url(#glass)" fill-opacity=".13"/>
+    <g fill="#a8d1c1" fill-opacity=".34">
+      <rect x="31" y="33" width="17" height="17" rx="4"/>
+      <rect x="57" y="33" width="17" height="17" rx="4"/>
+      <rect x="96" y="33" width="17" height="17" rx="4"/>
+      <rect x="122" y="33" width="17" height="17" rx="4"/>
+      <rect x="31" y="59" width="17" height="17" rx="4"/>
+      <rect x="122" y="59" width="17" height="17" rx="4"/>
+      <rect x="31" y="94" width="17" height="17" rx="4"/>
+      <rect x="139" y="94" width="17" height="17" rx="4"/>
+      <rect x="31" y="120" width="17" height="17" rx="4"/>
+      <rect x="57" y="120" width="17" height="17" rx="4"/>
+      <rect x="96" y="120" width="17" height="17" rx="4"/>
+      <rect x="122" y="120" width="17" height="17" rx="4"/>
+    </g>
+    <path d="M65 77V66a20 20 0 0 1 40 0v11" fill="none" stroke="#e1f3eb"
+          stroke-width="8" stroke-linecap="round"/>
+    <rect x="56" y="74" width="58" height="49" rx="11" fill="#d9eee5"/>
+    <circle cx="85" cy="94" r="5" fill="#244943"/>
+    <path d="M85 97v10" stroke="#244943" stroke-width="4" stroke-linecap="round"/>
+  </g>
+
+  <g fill="none" stroke="#a9d2c2" stroke-opacity=".24" stroke-width="1.4">
+    <path d="M150 154h64v-28h42M150 267h58v24h52"/>
+    <path d="M676 154h52v-30h42M676 268h72v28h48"/>
+    <path d="M112 210h60M692 210h72"/>
+  </g>
+  <g fill="#b5d7ca" fill-opacity=".55">
+    <circle cx="256" cy="126" r="3"/>
+    <circle cx="260" cy="291" r="3"/>
+    <circle cx="770" cy="124" r="3"/>
+    <circle cx="796" cy="296" r="3"/>
+    <circle cx="170" cy="210" r="2.5"/>
+    <circle cx="692" cy="210" r="2.5"/>
+  </g>
+
+  <g font-family="-apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif">
+    <text x="822" y="205" fill="#e5f1eb" font-size="48" font-weight="550" letter-spacing="2.2">
+      AES OPEN CRYPT
+    </text>
+    <path d="M822 237h505" stroke="#a9d2c2" stroke-opacity=".42"/>
+    <path d="M822 237h92" stroke="#a8d1c1" stroke-width="2.5"/>
+  </g>
+  <g fill="none" stroke="#b3d5c9" stroke-opacity=".12">
+    <path d="M1402 152h54v116h-54"/>
+    <path d="M1421 176h17M1421 190h29M1421 204h21M1421 218h29M1421 232h17"/>
+  </g>
+  <g fill="#a9d2c2" fill-opacity=".5">
+    <circle cx="86" cy="82" r="2"/>
+    <circle cx="1514" cy="338" r="2"/>
+    <circle cx="1514" cy="82" r="2"/>
+    <circle cx="86" cy="338" r="2"/>
+  </g>
+</svg>
