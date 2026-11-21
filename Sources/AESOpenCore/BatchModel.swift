@@ -193,7 +193,7 @@ public final class BatchModel: ObservableObject {
     ) {
         guard !urls.isEmpty else {
             if let message = Self.unreadableDropMessage(unreadableCount) {
-                state.notice = message
+                dispatch(.setNotice(message))
             }
             return
         }
@@ -201,9 +201,9 @@ public final class BatchModel: ObservableObject {
         if phase == .working {
             let base = "Finish the current batch first."
             if let message = Self.unreadableDropMessage(unreadableCount) {
-                state.notice = "\(base) \(message)"
+                dispatch(.setNotice("\(base) \(message)"))
             } else {
-                state.notice = base
+                dispatch(.setNotice(base))
             }
             return
         }
@@ -226,8 +226,8 @@ public final class BatchModel: ObservableObject {
             if preferredMode == nil,
                plannedModes.contains(.encrypt),
                plannedModes.contains(.decrypt) {
-                state.errorMessage = nil
-                state.notice = Self.mixedDropNotice
+                dispatch(.setError(nil))
+                dispatch(.setNotice(Self.mixedDropNotice))
                 return
             }
 
@@ -245,29 +245,20 @@ public final class BatchModel: ObservableObject {
             }
 
             state.mode = desiredMode
-
-            state.rows = plan.items.map {
-                Row(id: UUID(), item: $0, status: .pending, fraction: 0)
-            }
-            state.phase = .ready
-            state.overallProgress = 0
-            state.errorMessage = nil
-            state.passwordError = nil
-            state.notice = Self.unreadableDropMessage(unreadableCount)
+            dispatch(
+                .installPlan(
+                    items: plan.items,
+                    mode: desiredMode,
+                    notice: Self.unreadableDropMessage(unreadableCount)
+                )
+            )
         } catch {
-            state.errorMessage = Self.message(for: error)
+            dispatch(.setError(Self.message(for: error)))
         }
     }
 
     public func remove(_ id: UUID) {
-        guard phase != .working else { return }
-        state.rows.removeAll { $0.id == id }
-        if state.rows.isEmpty {
-            clear()
-        } else {
-            state.phase = .ready
-            state.overallProgress = 0
-        }
+        dispatch(.remove(id))
     }
 
     public func clear() {
@@ -275,16 +266,7 @@ public final class BatchModel: ObservableObject {
         activeTask?.cancel()
         cancellation = nil
         activeTask = nil
-        state.runGeneration += 1
-        state.rows = []
-        state.phase = .idle
-        state.overallProgress = 0
-        state.errorMessage = nil
-        state.passwordError = nil
-        state.notice = nil
-        state.password = ""
-        state.confirmation = ""
-        state.hint = ""
+        dispatch(.clear)
     }
 
     /// The plan the rows already hold. Start runs exactly these items, so the
@@ -471,21 +453,17 @@ public final class BatchModel: ObservableObject {
             mode: mode,
             outputPolicy: .unique
         ) else {
+            // A mode that cannot plan the current inputs leaves them alone.
             return
         }
 
-        var newRows: [Row] = []
-        newRows.reserveCapacity(plan.items.count)
-        for (index, item) in plan.items.enumerated() {
-            let id = index < rows.count ? rows[index].id : UUID()
-            newRows.append(Row(id: id, item: item, status: .pending, fraction: 0))
-        }
+        dispatch(.installPlan(items: plan.items, mode: mode, notice: notice))
+    }
 
-        state.rows = newRows
-        state.phase = .ready
-        state.overallProgress = 0
-        state.errorMessage = nil
-        state.passwordError = nil
+    /// The only way the session changes: hand the current state and one event
+    /// to the reducer, keep the new state, then run whatever it asks for.
+    private func dispatch(_ event: BatchEvent) {
+        (state, _) = BatchReducer.reduce(state: state, event: event)
     }
 
     private static func unreadableDropMessage(_ count: Int) -> String? {
