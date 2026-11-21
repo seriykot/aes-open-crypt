@@ -130,6 +130,19 @@ assert row["output"] == os.path.abspath(sys.argv[2]), row
 PY
 ok "--json emits the documented object and parses with json.tool"
 
+mkdir -p "$WORK/json/dir"
+run_expect 5 "$BIN" encrypt --password "$PW" --json "$WORK/json/dir"
+python3 - "$WORK/stdout" <<'PY' || fail "JSON issue message is not the shared text"
+import json, sys
+doc = json.load(open(sys.argv[1]))
+row = doc["results"][0]
+assert row["status"] == "error", row
+assert row["error"]["code"] == 5, row
+assert row["error"]["kind"] == "notAFile", row
+assert row["error"]["message"] == "This is a folder or document package, not a file. Zip it first to encrypt it.", row
+PY
+ok "--json issue rows carry the shared message text"
+
 # ---------------------------------------------------------------- password file
 
 mkdir -p "$WORK/pwfile" "$WORK/pwfile/out"

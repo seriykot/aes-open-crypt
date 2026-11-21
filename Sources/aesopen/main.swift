@@ -588,7 +588,7 @@ private func describe(_ failure: AESCryptBatchFailure) -> FailureDescription {
         return FailureDescription(
             code: exitCode(for: issue),
             kind: kind(for: issue),
-            message: message(for: issue)
+            message: issue.userMessage
         )
     }
 }
@@ -619,29 +619,6 @@ private func message(for error: Error) -> String {
 
 private func message(for error: AESCryptError) -> String {
     error.errorDescription ?? "Unknown encryption error."
-}
-
-private func message(for issue: AESCryptBatchIssue) -> String {
-    switch issue {
-    case .tooManyFiles(let maximum):
-        return "Too many files. The limit is \(maximum)."
-    case .notAFile:
-        return "This is a folder or document package, not a regular file. Zip it first to encrypt it."
-    case .alreadyEncrypted:
-        return "This is already an AES Crypt file. Use decrypt instead."
-    case .notEncrypted:
-        return "This is not an AES Crypt file. Use encrypt instead."
-    case .invalidAESFile:
-        return "This is not a valid AES Crypt file."
-    case .unsupportedVersion(let version):
-        return "AES Crypt stream format \(version) is not supported."
-    case .outputExists(let path):
-        return "An output file already exists at \(path)."
-    case .sameFile:
-        return "The input and output are the same file."
-    case .inspectFailed(let detail):
-        return "Could not inspect the file: \(detail)"
-    }
 }
 
 private func exitCode(for error: Error) -> Int32 {
