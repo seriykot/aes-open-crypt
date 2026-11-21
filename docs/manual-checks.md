@@ -3,16 +3,16 @@
 These checks need a real desktop or a disposable macOS system.
 
 Finder Services, **Repair Command Line Tool**, the clean-volume pkg install,
-and the zip first launch are release gates for 0.2.0.
+and the zip first launch are release gates for 0.3.0.
 
 The Dock drag-and-drop checks (sections 1 to 4) are **work in progress**. The
-Dock path is experimental and not a gate for 0.2.0. Keep the steps for when
+Dock path is experimental and not a gate for 0.3.0. Keep the steps for when
 that path is finished.
 
-Run them against the 0.2.0 artifacts:
+Run them against the 0.3.0 artifacts:
 
-- `dist/AES Open Crypt 0.2.0.pkg` — primary install
-- `dist/AES Open Crypt 0.2.0.zip` — portable install
+- `dist/AES Open Crypt 0.3.0.pkg` — primary install
+- `dist/AES Open Crypt 0.3.0.zip` — portable install
 - `dist/AES Open Crypt.app` — built app
 
 ## Setup
@@ -143,12 +143,12 @@ Restore with `sudo chmod 775 /usr/local/bin`.
 Use a macOS VM (UTM, Parallels, or VMware) or a spare Mac. Do not test this
 over the working install.
 
-1. Copy `AES Open Crypt 0.2.0.pkg` to the clean system.
+1. Copy `AES Open Crypt 0.3.0.pkg` to the clean system.
 2. Double-click it. If Gatekeeper blocks the unsigned package, right-click
    it and choose **Open**, or run:
 
    ```bash
-   sudo installer -pkg "AES Open Crypt 0.2.0.pkg" -target /
+   sudo installer -pkg "AES Open Crypt 0.3.0.pkg" -target /
    ```
 
 3. Verify:
@@ -161,7 +161,7 @@ over the working install.
    ```
 
 Expected: the app is in `/Applications`; the symlink exists;
-`aesopen --version` prints `aesopen 0.2.0`.
+`aesopen --version` prints `aesopen 0.3.0`.
 
 4. Conflict test: put an unrelated file at `/usr/local/bin/aesopen`, then
    install again. Expected: the install succeeds, the app is installed, and
@@ -196,28 +196,28 @@ afterwards.
 
 ## 9. Intel Mac (x86_64)
 
-The 0.2.0 artifacts are universal (`arm64` + `x86_64`). This check needs an
+The 0.3.0 artifacts are universal (`arm64` + `x86_64`). This check needs an
 Intel Mac with macOS 13 or later. It is the only way to test the native
 `x86_64` slice and AES Crypt 3.14, which is Intel-only.
 
 1. Transfer both artifacts and check the hashes:
 
    ```bash
-   shasum -a 256 "AES Open Crypt 0.2.0.pkg" "AES Open Crypt 0.2.0.zip"
+   shasum -a 256 "AES Open Crypt 0.3.0.pkg" "AES Open Crypt 0.3.0.zip"
    ```
 
    Expected:
 
    ```
-   04602aedc3d24b08cb33f0e8fc53d47b2426d6d49cdd8820da72db033ae5918e  AES Open Crypt 0.2.0.pkg
-   4f57298e6900416881d0d523d945b2f5e2e1c9c43df06b0cedb12d3ae9f5d805  AES Open Crypt 0.2.0.zip
+   04602aedc3d24b08cb33f0e8fc53d47b2426d6d49cdd8820da72db033ae5918e  AES Open Crypt 0.3.0.pkg
+   4f57298e6900416881d0d523d945b2f5e2e1c9c43df06b0cedb12d3ae9f5d805  AES Open Crypt 0.3.0.zip
    ```
 
 2. Install the package. If Gatekeeper blocks it, right-click and choose
    **Open**, or run:
 
    ```bash
-   sudo installer -pkg "AES Open Crypt 0.2.0.pkg" -target /
+   sudo installer -pkg "AES Open Crypt 0.3.0.pkg" -target /
    ```
 
 3. Verify the install and the architecture:
@@ -231,7 +231,7 @@ Intel Mac with macOS 13 or later. It is the only way to test the native
    ```
 
    Expected: both `lipo` lines print `x86_64 arm64`; the link points into
-   `/Applications/AES Open Crypt.app`; the version prints `aesopen 0.2.0`.
+   `/Applications/AES Open Crypt.app`; the version prints `aesopen 0.3.0`.
 
 4. CLI round trip and AES Crypt 3.14 cross-check:
 
