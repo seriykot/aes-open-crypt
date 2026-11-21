@@ -105,6 +105,21 @@ final class EncryptTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: encrypted), Data("keep me".utf8))
     }
 
+    func testEncryptOutputPermissionsAre0644() throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let input = directory.appendingPathComponent("plain")
+        let encrypted = directory.appendingPathComponent("plain.aes")
+        try Data("hello".utf8).write(to: input)
+
+        try AESCrypt.encrypt(url: input, to: encrypted, password: "apples")
+
+        let attributes = try FileManager.default.attributesOfItem(atPath: encrypted.path)
+        let permissions = try XCTUnwrap(attributes[.posixPermissions] as? NSNumber)
+        XCTAssertEqual(permissions.intValue, 0o644)
+    }
+
     func testCancelRemovesTemporaryFile() throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("aesopen-cancel-\(UUID().uuidString)")
@@ -129,6 +144,13 @@ final class EncryptTests: XCTestCase {
 
         let leftovers = try FileManager.default.contentsOfDirectory(atPath: directory.path)
         XCTAssertEqual(leftovers.sorted(), ["plain"])
+    }
+
+    private func makeTemporaryDirectory() throws -> URL {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("aesopen-encrypt-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        return directory
     }
 
     private func roundTrip(_ plaintext: Data, format: AESOutputFormat) throws -> Data {
