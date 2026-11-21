@@ -168,11 +168,21 @@ final class BatchModelTests: XCTestCase {
         )
 
         let model = BatchModel()
-        model.add(urls: [plain, encrypted], preferredMode: nil)
-        XCTAssertTrue(model.hasMixedInputs)
-        XCTAssertTrue(model.decryptHints.isEmpty)
+        model.add(urls: [encrypted], preferredMode: nil)
+        XCTAssertEqual(model.mode, .decrypt)
+        XCTAssertEqual(model.sharedDecryptHint, "garden")
+        let decryptRows = model.rows
+
+        // A plain file cannot join a decrypt batch in auto mode: the drop is
+        // refused with the notice and the hinted rows stay as they were.
+        model.add(urls: [plain], preferredMode: nil)
+        XCTAssertEqual(model.notice, BatchModel.mixedDropNotice)
+        XCTAssertEqual(model.rows, decryptRows)
+        XCTAssertEqual(model.mode, .decrypt)
+        XCTAssertEqual(model.decryptHints, ["garden"])
 
         model.clear()
+        XCTAssertNil(model.notice)
         model.hint = "will be cleared"
         model.add(urls: [encrypted], preferredMode: .decrypt)
         XCTAssertEqual(model.sharedDecryptHint, "garden")
@@ -234,20 +244,21 @@ final class BatchModelTests: XCTestCase {
 
         let plain = directory.appendingPathComponent("notes.txt")
         try Data("plain\n".utf8).write(to: plain)
-        let encrypted = try makeEncryptedFile(in: directory, name: "secret", password: "apples")
 
         let model = BatchModel()
-        model.add(urls: [plain, encrypted], preferredMode: nil)
-        XCTAssertEqual(model.rows.count, 2)
+        model.add(urls: [plain], preferredMode: nil)
+        XCTAssertEqual(model.rows.count, 1)
+        XCTAssertEqual(model.mode, .encrypt)
+        XCTAssertNil(model.rows[0].item.issue)
 
         model.mode = .decrypt
 
-        let plainRow = try XCTUnwrap(model.rows.first { $0.item.input == plain })
-        XCTAssertEqual(plainRow.item.issue, .notEncrypted)
-        XCTAssertEqual(model.rows.count, 2)
+        XCTAssertEqual(model.rows.count, 1)
+        XCTAssertEqual(model.mode, .decrypt)
+        XCTAssertEqual(model.rows[0].item.issue, .notEncrypted)
     }
 
-    func testMixedInputsSetsFlag() throws {
+    func testMixedDropSetsExactNoticeAndAddsNoRows() throws {
         let directory = try makeDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
 
@@ -255,18 +266,142 @@ final class BatchModelTests: XCTestCase {
         try Data("plain\n".utf8).write(to: plain)
         let encrypted = try makeEncryptedFile(in: directory, name: "secret", password: "apples")
 
-        let mixed = BatchModel()
-        mixed.add(urls: [plain, encrypted], preferredMode: nil)
-        XCTAssertTrue(mixed.hasMixedInputs)
+        let model = BatchModel()
+        model.add(urls: [plain, encrypted], preferredMode: nil)
 
-        let plainOnly = BatchModel()
+        XCTAssertEqual(
+            BatchModel.mixedDropNotice,
+            "Drop plain files or encrypted files separately"
+        )
+        XCTAssertEqual(model.notice, BatchModel.mixedDropNotice)
+        XCTAssertTrue(model.rows.isEmpty)
+        XCTAssertEqual(model.phase, .idle)
+        XCTAssertEqual(model.mode, .encrypt)
+        XCTAssertNil(model.errorMessage)
+        XCTAssertFalse(model.canStart)
+    }
+
+    func testMixedDropLeavesExistingRowsUntouched() throws {
+        let directory = try makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let plain = directory.appendingPathComponent("notes.txt")
+        try Data("plain\n".utf8).write(to: plain)
         let second = directory.appendingPathComponent("second.txt")
         try Data("second\n".utf8).write(to: second)
-        plainOnly.add(urls: [plain, second], preferredMode: nil)
-        XCTAssertFalse(plainOnly.hasMixedInputs)
+        let encrypted = try makeEncryptedFile(in: directory, name: "secret", password: "apples")
+
+        let model = BatchModel()
+        model.add(urls: [plain], preferredMode: nil)
+        let before = model.rows
+        XCTAssertEqual(before.count, 1)
+        XCTAssertEqual(model.phase, .ready)
+        XCTAssertEqual(model.mode, .encrypt)
+
+        model.add(urls: [second, encrypted], preferredMode: nil)
+
+        XCTAssertEqual(model.notice, BatchModel.mixedDropNotice)
+        XCTAssertEqual(model.rows, before)
+        XCTAssertEqual(model.mode, .encrypt)
+        XCTAssertEqual(model.phase, .ready)
     }
 
-    func testMixedBatchUsesOneModeForEveryRow() throws {
+    func testMixedDropAfterFinishedLeavesFinishedRows() async throws {
+        let directory = try makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let plain = directory.appendingPathComponent("notes.txt")
+        try Data("plain\n".utf8).write(to: plain)
+        let encrypted = try makeEncryptedFile(in: directory, name: "secret", password: "apples")
+
+        let model = BatchModel()
+        model.add(urls: [plain], preferredMode: nil)
+        model.password = "apples"
+        model.confirmation = "apples"
+        model.start()
+        await model.activeTask?.value
+        XCTAssertEqual(model.phase, .finished)
+        let finishedRows = model.rows
+        XCTAssertEqual(finishedRows.map(\.status), [.succeeded])
+
+        model.add(urls: [plain, encrypted], preferredMode: nil)
+
+        XCTAssertEqual(model.notice, BatchModel.mixedDropNotice)
+        XCTAssertEqual(model.rows.map(\.id), finishedRows.map(\.id))
+        XCTAssertEqual(model.rows.map(\.status), [.succeeded])
+        XCTAssertEqual(model.phase, .finished)
+        XCTAssertEqual(model.mode, .encrypt)
+    }
+
+    func testMixedDropWhileWorkingKeepsFinishNotice() async throws {
+        let directory = try makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let big = directory.appendingPathComponent("big.txt")
+        try Data(repeating: 0x41, count: 8 * 1024 * 1024).write(to: big)
+        let plain = directory.appendingPathComponent("notes.txt")
+        try Data("plain\n".utf8).write(to: plain)
+        let encrypted = try makeEncryptedFile(in: directory, name: "secret", password: "apples")
+
+        let model = BatchModel()
+        model.add(urls: [big], preferredMode: .encrypt)
+        model.password = "apples"
+        model.confirmation = "apples"
+        model.start()
+        XCTAssertEqual(model.phase, .working)
+        let workingRows = model.rows
+
+        model.add(urls: [plain, encrypted], preferredMode: nil)
+
+        XCTAssertEqual(model.notice, "Finish the current batch first.")
+        XCTAssertEqual(model.rows, workingRows)
+
+        model.cancel()
+        await model.activeTask?.value
+    }
+
+    func testMixedDropWithUnreadableFilesUsesExactNotice() throws {
+        let directory = try makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let plain = directory.appendingPathComponent("notes.txt")
+        try Data("plain\n".utf8).write(to: plain)
+        let encrypted = try makeEncryptedFile(in: directory, name: "secret", password: "apples")
+
+        let model = BatchModel()
+        model.add(urls: [plain, encrypted], preferredMode: nil, unreadableCount: 2)
+
+        XCTAssertEqual(model.notice, BatchModel.mixedDropNotice)
+        XCTAssertTrue(model.rows.isEmpty)
+    }
+
+    func testExplicitModeStillAcceptsMixedInputs() throws {
+        let directory = try makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let plain = directory.appendingPathComponent("notes.txt")
+        try Data("plain\n".utf8).write(to: plain)
+        let encrypted = try makeEncryptedFile(in: directory, name: "secret", password: "apples")
+
+        let encryptModel = BatchModel()
+        encryptModel.add(urls: [plain, encrypted], preferredMode: .encrypt)
+        XCTAssertEqual(encryptModel.mode, .encrypt)
+        XCTAssertEqual(encryptModel.rows.count, 2)
+        XCTAssertEqual(encryptModel.rows[0].item.issue, nil)
+        XCTAssertEqual(encryptModel.rows[1].item.issue, .alreadyEncrypted)
+        XCTAssertNil(encryptModel.notice)
+        XCTAssertFalse(encryptModel.canStart)
+
+        let decryptModel = BatchModel()
+        decryptModel.add(urls: [plain, encrypted], preferredMode: .decrypt)
+        XCTAssertEqual(decryptModel.mode, .decrypt)
+        XCTAssertEqual(decryptModel.rows.count, 2)
+        XCTAssertEqual(decryptModel.rows[0].item.issue, .notEncrypted)
+        XCTAssertEqual(decryptModel.rows[1].item.issue, nil)
+        XCTAssertNil(decryptModel.notice)
+    }
+
+    func testUniformDropClearsMixedNotice() throws {
         let directory = try makeDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
 
@@ -276,17 +411,15 @@ final class BatchModelTests: XCTestCase {
 
         let model = BatchModel()
         model.add(urls: [plain, encrypted], preferredMode: nil)
+        XCTAssertEqual(model.notice, BatchModel.mixedDropNotice)
+        XCTAssertTrue(model.rows.isEmpty)
 
+        model.add(urls: [plain], preferredMode: nil)
+
+        XCTAssertEqual(model.rows.count, 1)
+        XCTAssertNil(model.notice)
         XCTAssertEqual(model.mode, .encrypt)
-        XCTAssertTrue(model.hasMixedInputs)
-        XCTAssertEqual(model.rows[0].item.issue, nil)
-        XCTAssertEqual(model.rows[1].item.issue, .alreadyEncrypted)
-        XCTAssertFalse(model.canStart)
-
-        model.mode = .decrypt
-        XCTAssertTrue(model.hasMixedInputs, "the inputs are still mixed after a mode switch")
-        XCTAssertEqual(model.rows[0].item.issue, .notEncrypted)
-        XCTAssertEqual(model.rows[1].item.issue, nil)
+        XCTAssertEqual(model.phase, .ready)
     }
 
     func testCanStartRequiresMatchingConfirmationForEncrypt() throws {
@@ -327,9 +460,13 @@ final class BatchModelTests: XCTestCase {
         XCTAssertEqual(model.rows[1].status, .wrongPassword)
         XCTAssertEqual(model.passwordError, "Wrong password. Try again.")
 
-        let plain = directory.appendingPathComponent("plain.txt")
-        try Data("plain\n".utf8).write(to: plain)
-        model.add(urls: [plain], preferredMode: nil)
+        // A drop in the same direction replaces the batch and drops the stale
+        // password error. A plain file here would be a mixed drop, which is
+        // now refused, so use another encrypted file.
+        let third = try makeEncryptedFile(in: directory, name: "third", password: "apples")
+        model.add(urls: [third], preferredMode: nil)
+        XCTAssertEqual(model.mode, .decrypt)
+        XCTAssertEqual(model.rows.count, 3)
         XCTAssertNil(model.passwordError)
     }
 
