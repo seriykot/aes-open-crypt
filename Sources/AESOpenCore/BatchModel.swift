@@ -29,6 +29,7 @@ public final class BatchModel: ObservableObject {
 
     public static let shared = BatchModel()
     public static let maximumHintLength = AESPasswordHint.maximumLength
+    public static let mixedDropNotice = "Drop plain files or encrypted files separately"
 
     @Published public private(set) var rows: [Row] = []
     @Published public private(set) var phase: Phase = .idle
@@ -150,9 +151,6 @@ public final class BatchModel: ObservableObject {
             }
             return
         }
-        if phase == .finished {
-            clear()
-        }
 
         let combined = rows.map(\.item.input) + urls
 
@@ -165,9 +163,20 @@ public final class BatchModel: ObservableObject {
             guard !plan.items.isEmpty else { return }
 
             let plannedModes = Set(plan.items.map(\.mode))
-            let isMixed = preferredMode == nil
-                && plannedModes.contains(.encrypt)
-                && plannedModes.contains(.decrypt)
+
+            // One batch runs in one direction. Auto mode cannot plan a mixed
+            // drop, so refuse it before touching any state: existing rows,
+            // mode, phase, and statuses stay exactly as they were.
+            if preferredMode == nil,
+               plannedModes.contains(.encrypt),
+               plannedModes.contains(.decrypt) {
+                notice = Self.mixedDropNotice
+                return
+            }
+
+            if phase == .finished {
+                clear()
+            }
 
             let desiredMode: AESCryptBatchMode
             if let preferredMode {
@@ -182,21 +191,10 @@ public final class BatchModel: ObservableObject {
             mode = desiredMode
             isUpdatingMode = false
 
-            let effectivePlan: AESCryptBatchPlan
-            if isMixed {
-                effectivePlan = try AESCryptBatch.plan(
-                    urls: combined,
-                    mode: desiredMode,
-                    outputPolicy: .unique
-                )
-            } else {
-                effectivePlan = plan
-            }
-
-            rows = effectivePlan.items.map {
+            rows = plan.items.map {
                 Row(id: UUID(), item: $0, status: .pending, fraction: 0)
             }
-            hasMixedInputs = isMixed
+            hasMixedInputs = false
             phase = .ready
             overallProgress = 0
             errorMessage = nil
