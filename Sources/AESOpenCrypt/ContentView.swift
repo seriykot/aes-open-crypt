@@ -188,7 +188,7 @@ struct ContentView: View {
                     .font(.headline)
                     .foregroundStyle(Theme.textPrimary)
 
-                Text("Up to 10 files. Plain files are encrypted, .aes files are decrypted.")
+                Text("Up to \(AESCryptBatch.maximumFileCount) files. Plain files are encrypted, .aes files are decrypted.")
                     .font(.caption)
                     .foregroundStyle(Theme.textSecondary)
                     .multilineTextAlignment(.center)
@@ -226,20 +226,6 @@ struct ContentView: View {
 
     private var form: some View {
         VStack(alignment: .leading, spacing: 12) {
-            if model.hasMixedInputs {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("This drop has plain files and encrypted files")
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(Theme.textSecondary)
-                    Picker("Action", selection: $model.mode) {
-                        Text("Encrypt").tag(AESCryptBatchMode.encrypt)
-                        Text("Decrypt").tag(AESCryptBatchMode.decrypt)
-                    }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
-                }
-            }
-
             passwordField(
                 title: "Password",
                 placeholder: model.mode == .decrypt ? "File password" : "Choose a password",

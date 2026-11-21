@@ -29,6 +29,7 @@ public final class BatchModel: ObservableObject {
 
     public static let shared = BatchModel()
     public static let maximumHintLength = AESPasswordHint.maximumLength
+    public static let mixedDropNotice = "Drop plain files or encrypted files separately"
 
     @Published public private(set) var rows: [Row] = []
     @Published public private(set) var phase: Phase = .idle
@@ -36,7 +37,6 @@ public final class BatchModel: ObservableObject {
     @Published public private(set) var errorMessage: String?
     @Published public private(set) var passwordError: String?
     @Published public private(set) var notice: String?
-    @Published public private(set) var hasMixedInputs = false
 
     @Published public var password = ""
     @Published public var confirmation = ""
@@ -150,24 +150,33 @@ public final class BatchModel: ObservableObject {
             }
             return
         }
-        if phase == .finished {
-            clear()
-        }
 
-        let combined = rows.map(\.item.input) + urls
+        let planInputs = phase == .finished ? urls : rows.map(\.item.input) + urls
 
         do {
             let plan = try AESCryptBatch.plan(
-                urls: combined,
+                urls: planInputs,
                 mode: preferredMode,
                 outputPolicy: .unique
             )
             guard !plan.items.isEmpty else { return }
 
             let plannedModes = Set(plan.items.map(\.mode))
-            let isMixed = preferredMode == nil
-                && plannedModes.contains(.encrypt)
-                && plannedModes.contains(.decrypt)
+
+            // One batch runs in one direction. Auto mode cannot plan a mixed
+            // drop, so refuse it before touching any state: existing rows,
+            // mode, phase, and statuses stay exactly as they were.
+            if preferredMode == nil,
+               plannedModes.contains(.encrypt),
+               plannedModes.contains(.decrypt) {
+                errorMessage = nil
+                notice = Self.mixedDropNotice
+                return
+            }
+
+            if phase == .finished {
+                clear()
+            }
 
             let desiredMode: AESCryptBatchMode
             if let preferredMode {
@@ -182,21 +191,9 @@ public final class BatchModel: ObservableObject {
             mode = desiredMode
             isUpdatingMode = false
 
-            let effectivePlan: AESCryptBatchPlan
-            if isMixed {
-                effectivePlan = try AESCryptBatch.plan(
-                    urls: combined,
-                    mode: desiredMode,
-                    outputPolicy: .unique
-                )
-            } else {
-                effectivePlan = plan
-            }
-
-            rows = effectivePlan.items.map {
+            rows = plan.items.map {
                 Row(id: UUID(), item: $0, status: .pending, fraction: 0)
             }
-            hasMixedInputs = isMixed
             phase = .ready
             overallProgress = 0
             errorMessage = nil
@@ -213,7 +210,6 @@ public final class BatchModel: ObservableObject {
         if rows.isEmpty {
             clear()
         } else {
-            refreshMixedFlag()
             phase = .ready
             overallProgress = 0
         }
@@ -234,7 +230,6 @@ public final class BatchModel: ObservableObject {
         password = ""
         confirmation = ""
         hint = ""
-        hasMixedInputs = false
     }
 
     public func start() {
@@ -445,17 +440,6 @@ public final class BatchModel: ObservableObject {
         overallProgress = 0
         errorMessage = nil
         passwordError = nil
-    }
-
-    private func refreshMixedFlag() {
-        guard let plan = try? AESCryptBatch.plan(
-            urls: rows.map(\.item.input),
-            outputPolicy: .unique
-        ) else {
-            return
-        }
-        let modes = Set(plan.items.map(\.mode))
-        hasMixedInputs = modes.contains(.encrypt) && modes.contains(.decrypt)
     }
 
     private static func unreadableDropMessage(_ count: Int) -> String? {
