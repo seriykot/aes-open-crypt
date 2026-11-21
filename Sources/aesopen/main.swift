@@ -89,7 +89,7 @@ private struct Options {
     var output: String?
     var password: String?
     var passwordFile: String?
-    var format: AESFormatVersion = .v3
+    var format: AESOutputFormat = .v3
     var hint: String?
     var iterations: UInt32 = 600_000
     var json = false

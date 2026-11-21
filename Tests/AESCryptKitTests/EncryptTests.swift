@@ -131,7 +131,7 @@ final class EncryptTests: XCTestCase {
         XCTAssertEqual(leftovers.sorted(), ["plain"])
     }
 
-    private func roundTrip(_ plaintext: Data, format: AESFormatVersion) throws -> Data {
+    private func roundTrip(_ plaintext: Data, format: AESOutputFormat) throws -> Data {
         let input = temporaryOutput("in")
         let encrypted = temporaryOutput("in.aes")
         let decrypted = temporaryOutput("out")

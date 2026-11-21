@@ -345,7 +345,7 @@ public final class BatchModel: ObservableObject {
             let results = AESCryptBatch.run(
                 plan: plan,
                 password: password,
-                format: format,
+                format: AESOutputFormat(rawValue: format.rawValue) ?? .v3,
                 hint: hint,
                 progress: { update in
                     let newItem = update.itemIndex != lastIndex

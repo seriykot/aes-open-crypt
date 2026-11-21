@@ -29,7 +29,7 @@ final class PasswordHintTests: XCTestCase {
     }
 
     func testNoHintAddsNoExtension() throws {
-        for format in [AESFormatVersion.v2, .v3] {
+        for format in [AESOutputFormat.v2, .v3] {
             let files = try encryptedFile(Data("payload".utf8), format: format, hint: nil)
             defer { cleanUp(files.input, files.output) }
 
@@ -57,7 +57,7 @@ final class PasswordHintTests: XCTestCase {
 
     func testUnicodeHintRoundTrips() throws {
         let plaintext = Data("unicode hint payload".utf8)
-        for format in [AESFormatVersion.v2, .v3] {
+        for format in [AESOutputFormat.v2, .v3] {
             let files = try encryptedFile(plaintext, format: format, hint: "clé 🔐 世界")
             let decrypted = temporaryOutput("hint-decrypted-\(UUID().uuidString)")
             defer {
@@ -267,7 +267,7 @@ final class PasswordHintTests: XCTestCase {
 
     private func encryptedFile(
         _ plaintext: Data,
-        format: AESFormatVersion,
+        format: AESOutputFormat,
         hint: String?,
         password: String = "apples"
     ) throws -> (input: URL, output: URL) {

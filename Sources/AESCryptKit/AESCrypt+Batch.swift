@@ -287,7 +287,7 @@ extension AESCryptBatch {
     public static func run(
         plan: AESCryptBatchPlan,
         password: String,
-        format: AESFormatVersion = .v2,
+        format: AESOutputFormat = .v2,
         iterations: UInt32 = 600_000,
         hint: String? = nil,
         progress: ((AESCryptBatchProgress) -> Void)? = nil,

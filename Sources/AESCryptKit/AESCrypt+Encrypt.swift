@@ -7,7 +7,7 @@ extension AESCrypt {
         url: URL,
         to outputURL: URL,
         password: String,
-        format: AESFormatVersion = .v2,
+        format: AESOutputFormat = .v2,
         iterations: UInt32 = 600_000,
         hint: String? = nil,
         progress: AESCryptProgressHandler? = nil,
@@ -15,10 +15,8 @@ extension AESCrypt {
     ) throws {
         try FileSafety.ensureDistinct(input: url, output: outputURL)
 
-        guard format == .v2 || format == .v3 else {
-            throw AESCryptError.unsupportedVersion(format.rawValue)
-        }
-        if format == .v3, !(1...5_000_000).contains(iterations) {
+        let version = format.streamVersion
+        if version == .v3, !(1...5_000_000).contains(iterations) {
             throw AESCryptError.corrupt("KDF iteration count is out of range")
         }
 
@@ -37,7 +35,7 @@ extension AESCrypt {
         let iv0 = try randomData(16)
         let sessionKey = try randomData(32)
         let key: Data
-        if format == .v3 {
+        if version == .v3 {
             key = try KeyDerivation.pbkdf2(password: password, salt: iv1, iterations: iterations)
         } else {
             key = KeyDerivation.legacy(password: password, iv: iv1)
@@ -51,11 +49,11 @@ extension AESCrypt {
 
         var headerMAC = HMACStream(key: key)
         headerMAC.update(encryptedSession)
-        if format == .v3 {
-            headerMAC.update(Data([format.rawValue]))
+        if version == .v3 {
+            headerMAC.update(Data([version.rawValue]))
         }
 
-        var header = Data([0x41, 0x45, 0x53, format.rawValue, 0x00])
+        var header = Data([0x41, 0x45, 0x53, version.rawValue, 0x00])
         let createdBy = Data("aes-open-crypt 0.2.0".utf8)
         header.append(try extensionBlock(identifier: "CREATED_BY", value: createdBy))
         if let hint = normalizedHint(hint) {
@@ -67,7 +65,7 @@ extension AESCrypt {
             )
         }
         header.append(contentsOf: [0x00, 0x00])
-        if format == .v3 {
+        if version == .v3 {
             header.append(UInt8((iterations >> 24) & 0xFF))
             header.append(UInt8((iterations >> 16) & 0xFF))
             header.append(UInt8((iterations >> 8) & 0xFF))
@@ -107,7 +105,7 @@ extension AESCrypt {
             var plain = chunk
 
             if isFinal {
-                if format == .v2 {
+                if version == .v2 {
                     let padding = (16 - plain.count % 16) % 16
                     plain.append(contentsOf: repeatElement(UInt8(padding), count: padding))
                     modulo = UInt8(chunk.count % 16)
@@ -131,7 +129,7 @@ extension AESCrypt {
             payloadMAC.update(tail)
             try writer.write(contentsOf: tail)
         }
-        if format == .v2 {
+        if version == .v2 {
             try writer.write(contentsOf: Data([modulo]))
         }
         try writer.write(contentsOf: payloadMAC.finalize())

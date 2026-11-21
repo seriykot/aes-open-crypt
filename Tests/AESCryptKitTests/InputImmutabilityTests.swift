@@ -213,7 +213,7 @@ final class InputImmutabilityTests: XCTestCase {
         XCTAssertEqual(try snapshot(existing), before)
     }
 
-    private func assertEncryptLeavesInputUnchanged(format: AESFormatVersion) throws {
+    private func assertEncryptLeavesInputUnchanged(format: AESOutputFormat) throws {
         let directory = try makeTemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
 
