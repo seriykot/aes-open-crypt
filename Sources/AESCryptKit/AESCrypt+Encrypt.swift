@@ -15,10 +15,8 @@ extension AESCrypt {
     ) throws {
         try FileSafety.ensureDistinct(input: url, output: outputURL)
 
-        let version = format.streamVersion
-        if version == .v3, !(1...5_000_000).contains(iterations) {
-            throw AESCryptError.corrupt("KDF iteration count is out of range")
-        }
+        // Reject an unusable iteration count before touching the file system.
+        try validateIterations(iterations, for: format.streamVersion)
 
         let input: FileHandle
         do {
@@ -27,6 +25,34 @@ extension AESCrypt {
             throw AESCryptError.io(error.localizedDescription)
         }
         defer { try? input.close() }
+
+        try encrypt(
+            reader: input,
+            to: outputURL,
+            password: password,
+            format: format,
+            iterations: iterations,
+            hint: hint,
+            progress: progress,
+            isCancelled: isCancelled
+        )
+    }
+
+    /// The encrypt path with its input abstracted, so tests can drive read
+    /// failures that a real file cannot produce on demand. `url`-based callers
+    /// reach it through the public wrapper above.
+    static func encrypt(
+        reader input: ChunkReader,
+        to outputURL: URL,
+        password: String,
+        format: AESOutputFormat = .v2,
+        iterations: UInt32 = 600_000,
+        hint: String? = nil,
+        progress: AESCryptProgressHandler? = nil,
+        isCancelled: () -> Bool = { false }
+    ) throws {
+        let version = format.streamVersion
+        try validateIterations(iterations, for: version)
 
         let total = Int64(try input.seekToEnd())
         try input.seek(toOffset: 0)
@@ -130,6 +156,12 @@ extension AESCrypt {
     }
 }
 
+private func validateIterations(_ iterations: UInt32, for version: AESFormatVersion) throws {
+    if version == .v3, !(1...5_000_000).contains(iterations) {
+        throw AESCryptError.corrupt("KDF iteration count is out of range")
+    }
+}
+
 private func normalizedHint(_ hint: String?) -> String? {
     guard let hint else { return nil }
     let trimmed = hint.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -159,10 +191,10 @@ private func randomData(_ count: Int) throws -> Data {
     return data
 }
 
-private func readUpTo(_ handle: FileHandle, _ count: Int) throws -> Data {
+private func readUpTo(_ reader: ChunkReader, _ count: Int) throws -> Data {
     var result = Data()
     while result.count < count {
-        guard let chunk = try? handle.read(upToCount: count - result.count),
+        guard let chunk = try? reader.read(upToCount: count - result.count),
               !chunk.isEmpty else {
             break
         }
