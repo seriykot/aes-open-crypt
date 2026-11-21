@@ -691,29 +691,6 @@ private func outputName(for row: BatchModel.Row) -> String? {
     }
 }
 
-private func issueText(_ issue: AESCryptBatchIssue) -> String {
-    switch issue {
-    case .tooManyFiles(let maximum):
-        return "Maximum of \(maximum) files at a time is allowed."
-    case .notAFile:
-        return "This is a folder or document package (like .rtfd), not a file. Zip it first to encrypt it."
-    case .alreadyEncrypted:
-        return "This file is already encrypted."
-    case .notEncrypted:
-        return "This is not an AES Crypt file."
-    case .invalidAESFile:
-        return "This .aes file is not a valid AES Crypt file."
-    case .unsupportedVersion(let version):
-        return "AES Crypt stream format \(version) is not supported."
-    case .outputExists:
-        return "An output file with that name already exists."
-    case .sameFile:
-        return "The input and output would be the same file."
-    case .inspectFailed(let detail):
-        return "Could not read the file: \(detail)"
-    }
-}
-
 private struct FileRowView: View {
     let row: BatchModel.Row
     let phase: BatchModel.Phase
@@ -771,7 +748,7 @@ private struct FileRowView: View {
                         .foregroundStyle(Theme.danger)
                         .fixedSize(horizontal: false, vertical: true)
                 } else if let issue = row.item.issue {
-                    Text(issueText(issue))
+                    Text(issue.userMessage)
                         .font(.caption)
                         .foregroundStyle(Theme.warning)
                         .fixedSize(horizontal: false, vertical: true)

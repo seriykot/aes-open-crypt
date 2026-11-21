@@ -454,35 +454,12 @@ public final class BatchModel: ObservableObject {
 
     private static func message(for error: Error) -> String {
         if let issue = error as? AESCryptBatchIssue {
-            return message(for: issue)
+            return issue.userMessage
         }
         if let aesError = error as? AESCryptError {
             return message(for: aesError)
         }
         return error.localizedDescription
-    }
-
-    private static func message(for issue: AESCryptBatchIssue) -> String {
-        switch issue {
-        case .tooManyFiles(let maximum):
-            return "Maximum of \(maximum) files at a time is allowed."
-        case .notAFile:
-            return "That item is a folder or document package, not a file. Zip it first to encrypt it."
-        case .alreadyEncrypted:
-            return "This file is already encrypted."
-        case .notEncrypted:
-            return "This is not an AES Crypt file."
-        case .invalidAESFile:
-            return "This .aes file is not a valid AES Crypt file."
-        case .unsupportedVersion(let version):
-            return "AES Crypt stream format \(version) is not supported."
-        case .outputExists:
-            return "An output file with that name already exists."
-        case .sameFile:
-            return "The input and output would be the same file."
-        case .inspectFailed(let detail):
-            return "Could not read the file: \(detail)"
-        }
     }
 
     private static func message(for error: AESCryptError) -> String {
