@@ -244,7 +244,6 @@ public final class BatchModel: ObservableObject {
                 desiredMode = .encrypt
             }
 
-            state.mode = desiredMode
             dispatch(
                 .installPlan(
                     items: plan.items,
