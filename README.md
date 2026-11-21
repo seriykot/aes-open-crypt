@@ -50,7 +50,7 @@ or block launch.
 - **Real-world files:** encrypted and decrypted 11 local files, with exact
   matches and originals unchanged: 1 DOC, 2 DOCX, 3 PDF, 1 JPG, 1 RTF,
   2 ZIP, and 1 MP4. Private filenames and file contents are not published.
-- **Unit tests:** `swift test` passes 97 tests.
+- **Unit tests:** `swift test` passes 239 tests.
 
 ## 🛠 Build
 

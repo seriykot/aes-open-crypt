@@ -250,10 +250,12 @@ final class BatchModelTests: XCTestCase {
         XCTAssertEqual(model.rows.count, 1)
         XCTAssertEqual(model.mode, .encrypt)
         XCTAssertNil(model.rows[0].item.issue)
+        let rowID = model.rows[0].id
 
         model.mode = .decrypt
 
         XCTAssertEqual(model.rows.count, 1)
+        XCTAssertEqual(model.rows[0].id, rowID)
         XCTAssertEqual(model.mode, .decrypt)
         XCTAssertEqual(model.rows[0].item.issue, .notEncrypted)
     }
@@ -715,6 +717,127 @@ final class BatchModelTests: XCTestCase {
     private func isFailed(_ status: BatchModel.RowStatus) -> Bool {
         if case .failed = status { return true }
         return false
+    }
+
+    // MARK: - Session holes
+
+    func testRetryDoesNothingWithoutPassword() throws {
+        let directory = try makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let first = directory.appendingPathComponent("first.txt")
+        let second = directory.appendingPathComponent("second.txt")
+        try Data("first\n".utf8).write(to: first)
+        try Data("second\n".utf8).write(to: second)
+
+        let model = BatchModel()
+        model.add(urls: [first, second], preferredMode: .encrypt)
+        finish(model, failures: [nil, .crypto(.io("disk full"))])
+        XCTAssertEqual(model.phase, .finished)
+        XCTAssertFalse(model.canRetry, "retry needs a password")
+        let generation = model.runGeneration
+        let rows = model.rows
+
+        model.retryFailed()
+
+        XCTAssertEqual(model.phase, .finished, "retry without a password must not run")
+        XCTAssertEqual(model.runGeneration, generation)
+        XCTAssertEqual(model.rows, rows)
+    }
+
+    func testRemoveAfterFinishDoesNotEnableStart() throws {
+        let directory = try makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let first = directory.appendingPathComponent("first.txt")
+        let second = directory.appendingPathComponent("second.txt")
+        try Data("first\n".utf8).write(to: first)
+        try Data("second\n".utf8).write(to: second)
+
+        let model = BatchModel()
+        model.add(urls: [first, second], preferredMode: .encrypt)
+        finish(model, failures: [nil, nil])
+        XCTAssertEqual(model.phase, .finished)
+
+        model.remove(model.rows[0].id)
+        model.password = "apples"
+        model.confirmation = "apples"
+
+        XCTAssertEqual(model.phase, .finished, "removing a row must not reopen a finished batch")
+        XCTAssertEqual(model.rows.count, 1)
+        XCTAssertFalse(model.canStart, "a finished batch cannot start again")
+    }
+
+    func testClearHidesPassword() throws {
+        let directory = try makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let plain = directory.appendingPathComponent("notes.txt")
+        try Data("plain\n".utf8).write(to: plain)
+
+        let model = BatchModel()
+        model.add(urls: [plain], preferredMode: .encrypt)
+        model.password = "apples"
+        model.confirmation = "apples"
+        model.showPassword = true
+
+        model.clear()
+
+        XCTAssertFalse(model.showPassword, "clear must hide the password again")
+        XCTAssertEqual(model.password, "")
+        XCTAssertEqual(model.phase, .idle)
+    }
+
+    func testResultsClearFinishNotice() async throws {
+        let directory = try makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let big = directory.appendingPathComponent("big.txt")
+        try Data(repeating: 0x41, count: 8 * 1024 * 1024).write(to: big)
+        let plain = directory.appendingPathComponent("notes.txt")
+        try Data("plain\n".utf8).write(to: plain)
+        let encrypted = try makeEncryptedFile(in: directory, name: "secret", password: "apples")
+
+        let model = BatchModel()
+        model.add(urls: [big], preferredMode: .encrypt)
+        model.password = "apples"
+        model.confirmation = "apples"
+        model.start()
+        XCTAssertEqual(model.phase, .working)
+
+        model.add(urls: [plain, encrypted], preferredMode: nil)
+        XCTAssertEqual(model.notice, "Finish the current batch first.")
+
+        await model.activeTask?.value
+
+        XCTAssertEqual(model.phase, .finished)
+        XCTAssertNil(model.notice, "finishing a run clears the working notice")
+    }
+
+    func testRemovingWrongPasswordRowClearsPasswordError() async throws {
+        let directory = try makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let first = try makeEncryptedFile(in: directory, name: "first", password: "apples")
+        let second = try makeEncryptedFile(in: directory, name: "second", password: "pears")
+
+        let model = BatchModel()
+        model.add(urls: [first, second], preferredMode: nil)
+        XCTAssertEqual(model.mode, .decrypt)
+        model.password = "apples"
+        model.start()
+        await model.activeTask?.value
+
+        XCTAssertEqual(model.rows[0].status, .succeeded)
+        XCTAssertEqual(model.rows[1].status, .wrongPassword)
+        XCTAssertEqual(model.passwordError, "Wrong password. Try again.")
+        let failedID = model.rows[1].id
+
+        model.remove(failedID)
+
+        XCTAssertNil(model.passwordError, "removing the wrong-password row clears its message")
+        XCTAssertEqual(model.rows.count, 1)
+        XCTAssertEqual(model.phase, .finished)
     }
 
     // MARK: - Planned output

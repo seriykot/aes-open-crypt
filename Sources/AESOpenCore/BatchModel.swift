@@ -40,54 +40,76 @@ public final class BatchModel: ObservableObject {
     }
 
     public static let shared = BatchModel()
-    public static let maximumHintLength = AESPasswordHint.maximumLength
+    public nonisolated static let maximumHintLength = AESPasswordHint.maximumLength
     public static let mixedDropNotice = "Drop plain files or encrypted files separately"
 
-    @Published public private(set) var rows: [Row] = []
-    @Published public private(set) var phase: Phase = .idle
-    @Published public private(set) var overallProgress: Double = 0
-    @Published public private(set) var errorMessage: String?
-    @Published public private(set) var passwordError: String?
-    @Published public private(set) var notice: String?
+    /// The one value the model publishes. Everything below reads through it,
+    /// and the writable properties write through it, so SwiftUI bindings keep
+    /// working while the session stays a single testable snapshot.
+    @Published private var state: BatchState
 
-    @Published public var password = ""
-    @Published public var confirmation = ""
-    @Published public var hint = ""
-    @Published public var showPassword = false
+    public var rows: [Row] { state.rows }
+    public var phase: Phase { state.phase }
+    public var overallProgress: Double { state.overallProgress }
+    public var errorMessage: String? { state.errorMessage }
+    public var passwordError: String? { state.passwordError }
+    public var notice: String? { state.notice }
+    var runGeneration: Int { state.runGeneration }
 
-    @Published public var mode: AESCryptBatchMode = .encrypt {
-        didSet {
-            guard !isUpdatingMode, oldValue != mode else { return }
+    public var password: String {
+        get { state.password }
+        set { state.password = newValue }
+    }
+
+    public var confirmation: String {
+        get { state.confirmation }
+        set { state.confirmation = newValue }
+    }
+
+    public var hint: String {
+        get { state.hint }
+        set { state.hint = newValue }
+    }
+
+    public var showPassword: Bool {
+        get { state.showPassword }
+        set { state.showPassword = newValue }
+    }
+
+    public var mode: AESCryptBatchMode {
+        get { state.mode }
+        set {
+            guard !isUpdatingMode, state.mode != newValue else { return }
+            state.mode = newValue
             replanForMode()
         }
     }
 
-    @Published public var format: AESOutputFormat = .v3 {
-        didSet {
-            UserDefaults.standard.set(Int(format.rawValue), forKey: "outputFormat")
+    public var format: AESOutputFormat {
+        get { state.format }
+        set {
+            state.format = newValue
+            UserDefaults.standard.set(Int(newValue.rawValue), forKey: "outputFormat")
         }
     }
 
     private(set) var activeTask: Task<Void, Never>?
-    private(set) var runGeneration = 0
     private var cancellation: BatchCancellationFlag?
     private var isUpdatingMode = false
 
     public init() {
+        var state = BatchState()
         let saved = UserDefaults.standard.object(forKey: "outputFormat") as? Int
         if let saved, saved == AESOutputFormat.v2.rawValue {
-            format = .v2
+            state.format = .v2
         } else {
-            format = .v3
+            state.format = .v3
         }
+        self.state = state
     }
 
     public var canStart: Bool {
-        guard phase == .ready, !rows.isEmpty else { return false }
-        guard rows.allSatisfy({ $0.item.issue == nil }) else { return false }
-        guard !password.isEmpty else { return false }
-        if mode == .encrypt, password != confirmation { return false }
-        return true
+        state.canStart
     }
 
     /// A non-blocking hint: short passwords, or ones with neither an uppercase
@@ -136,45 +158,32 @@ public final class BatchModel: ObservableObject {
     }
 
     public var completedOutputs: [URL] {
-        rows.compactMap { row in
-            row.status == .succeeded ? row.item.output : nil
-        }
+        state.completedOutputs
     }
 
     /// Whether any row ended in a failure: a planning issue or a wrong
     /// password. Cancelled rows are not failures.
     public var hasFailedRows: Bool {
-        rows.contains { Self.countsAsFailure($0.status) }
+        state.hasFailedRows
     }
 
     /// Whether any row failed specifically because of a wrong password, which
     /// is the case the GUI offers to retry in place.
     public var hasWrongPasswordRows: Bool {
-        rows.contains { $0.status == .wrongPassword }
+        state.hasWrongPasswordRows
     }
 
     /// Whether a retry could start right now. The rules match ``canStart``:
     /// a failed row, a password, and — when encrypting — a matching
     /// confirmation.
     public var canRetry: Bool {
-        guard hasFailedRows, !password.isEmpty else { return false }
-        guard mode == .encrypt else { return true }
-        return password == confirmation
+        state.canRetry
     }
 
     /// The one line describing how a finished batch ended, or nil when no row
     /// finished or failed yet.
     public var finishedSummary: BatchSummary? {
-        let completed = completedOutputs.count
-        let failed = rows.filter { Self.countsAsFailure($0.status) }.count
-        guard !rows.isEmpty, completed + failed > 0 else { return nil }
-
-        if failed == 0 {
-            let files = completed == 1 ? "file" : "files"
-            let action = mode == .decrypt ? "decrypted" : "encrypted"
-            return BatchSummary(text: "\(completed) \(files) \(action)", isWarning: false)
-        }
-        return BatchSummary(text: "\(completed) finished, \(failed) failed", isWarning: true)
+        state.finishedSummary
     }
 
     public func add(
@@ -184,7 +193,7 @@ public final class BatchModel: ObservableObject {
     ) {
         guard !urls.isEmpty else {
             if let message = Self.unreadableDropMessage(unreadableCount) {
-                notice = message
+                dispatch(.setNotice(message))
             }
             return
         }
@@ -192,9 +201,9 @@ public final class BatchModel: ObservableObject {
         if phase == .working {
             let base = "Finish the current batch first."
             if let message = Self.unreadableDropMessage(unreadableCount) {
-                notice = "\(base) \(message)"
+                dispatch(.setNotice("\(base) \(message)"))
             } else {
-                notice = base
+                dispatch(.setNotice(base))
             }
             return
         }
@@ -217,8 +226,8 @@ public final class BatchModel: ObservableObject {
             if preferredMode == nil,
                plannedModes.contains(.encrypt),
                plannedModes.contains(.decrypt) {
-                errorMessage = nil
-                notice = Self.mixedDropNotice
+                dispatch(.setError(nil))
+                dispatch(.setNotice(Self.mixedDropNotice))
                 return
             }
 
@@ -235,32 +244,21 @@ public final class BatchModel: ObservableObject {
                 desiredMode = .encrypt
             }
 
-            isUpdatingMode = true
-            mode = desiredMode
-            isUpdatingMode = false
-
-            rows = plan.items.map {
-                Row(id: UUID(), item: $0, status: .pending, fraction: 0)
-            }
-            phase = .ready
-            overallProgress = 0
-            errorMessage = nil
-            passwordError = nil
-            notice = Self.unreadableDropMessage(unreadableCount)
+            dispatch(
+                .installPlan(
+                    items: plan.items,
+                    mode: desiredMode,
+                    notice: Self.unreadableDropMessage(unreadableCount),
+                    rowIDs: nil
+                )
+            )
         } catch {
-            errorMessage = Self.message(for: error)
+            dispatch(.setError(BatchState.message(for: error)))
         }
     }
 
     public func remove(_ id: UUID) {
-        guard phase != .working else { return }
-        rows.removeAll { $0.id == id }
-        if rows.isEmpty {
-            clear()
-        } else {
-            phase = .ready
-            overallProgress = 0
-        }
+        dispatch(.remove(id))
     }
 
     public func clear() {
@@ -268,16 +266,7 @@ public final class BatchModel: ObservableObject {
         activeTask?.cancel()
         cancellation = nil
         activeTask = nil
-        runGeneration += 1
-        rows = []
-        phase = .idle
-        overallProgress = 0
-        errorMessage = nil
-        passwordError = nil
-        notice = nil
-        password = ""
-        confirmation = ""
-        hint = ""
+        dispatch(.clear)
     }
 
     /// The plan the rows already hold. Start runs exactly these items, so the
@@ -288,18 +277,13 @@ public final class BatchModel: ObservableObject {
     }
 
     public func start() {
-        guard canStart else { return }
-
-        let plan = currentPlan
-        guard !plan.items.isEmpty else { return }
-
-        beginRun(plan: plan)
+        dispatch(.start)
     }
 
     public func retryFailed() {
         guard phase == .finished || phase == .ready else { return }
 
-        let failedRows = rows.filter { Self.countsAsFailure($0.status) }
+        let failedRows = rows.filter { BatchState.countsAsFailure($0.status) }
         guard !failedRows.isEmpty else { return }
 
         let plan: AESCryptBatchPlan
@@ -310,27 +294,12 @@ public final class BatchModel: ObservableObject {
                 outputPolicy: .unique
             )
         } catch {
-            errorMessage = Self.message(for: error)
+            dispatch(.setError(BatchState.message(for: error)))
             return
         }
         guard plan.items.count == failedRows.count else { return }
 
-        var items = plan.items.makeIterator()
-        var newRows: [Row] = []
-        newRows.reserveCapacity(rows.count)
-        for row in rows {
-            if case .failed = row.status, let item = items.next() {
-                newRows.append(Row(id: UUID(), item: item, status: .pending, fraction: 0))
-            } else if case .wrongPassword = row.status, let item = items.next() {
-                newRows.append(Row(id: UUID(), item: item, status: .pending, fraction: 0))
-            } else {
-                newRows.append(row)
-            }
-        }
-
-        rows = newRows
-        phase = .ready
-        beginRun(plan: plan)
+        dispatch(.retry(items: plan.items))
     }
 
     public func cancel() {
@@ -338,37 +307,22 @@ public final class BatchModel: ObservableObject {
         cancellation?.cancel()
         activeTask?.cancel()
         cancellation = nil
-
-        for index in rows.indices {
-            switch rows[index].status {
-            case .pending, .running:
-                rows[index].status = .cancelled
-            case .succeeded, .failed, .wrongPassword, .cancelled:
-                break
-            }
-        }
-        phase = .finished
+        dispatch(.cancel)
     }
 
-    private func beginRun(plan: AESCryptBatchPlan) {
+    /// Start the batch the reducer just approved. The plan, password, format,
+    /// hint, and generation all come from the effect, so this method only owns
+    /// the task and its cancellation flag — it never touches the session.
+    private func beginRun(
+        plan: AESCryptBatchPlan,
+        password: String,
+        format: AESOutputFormat,
+        hint: String?,
+        generation: Int
+    ) {
         let rowIDs = rows.filter { $0.status == .pending }.map(\.id)
         guard rowIDs.count == plan.items.count else { return }
 
-        phase = .working
-        overallProgress = 0
-        errorMessage = nil
-        passwordError = nil
-        notice = nil
-
-        let password = self.password
-        let format = self.format
-        let hint = Self.normalizedHint(self.hint)
-        self.password = ""
-        self.confirmation = ""
-        self.hint = ""
-
-        runGeneration += 1
-        let generation = runGeneration
         let flag = BatchCancellationFlag()
         cancellation = flag
 
@@ -405,21 +359,7 @@ public final class BatchModel: ObservableObject {
         rowIDs: [UUID],
         generation: Int
     ) {
-        guard generation == runGeneration,
-              phase == .working,
-              update.itemIndex >= 0,
-              update.itemIndex < rowIDs.count else { return }
-
-        let id = rowIDs[update.itemIndex]
-        guard let index = rows.firstIndex(where: { $0.id == id }) else { return }
-
-        if rows[index].status == .pending {
-            rows[index].status = .running
-        }
-        if rows[index].status == .running {
-            rows[index].fraction = update.itemFraction
-            overallProgress = update.overallFraction
-        }
+        dispatch(.progress(update, rowIDs: rowIDs, generation: generation))
     }
 
     func applyResults(
@@ -428,30 +368,7 @@ public final class BatchModel: ObservableObject {
         generation: Int
     ) {
         guard generation == runGeneration else { return }
-
-        for (offset, result) in results.enumerated() where offset < rowIDs.count {
-            guard let index = rows.firstIndex(where: { $0.id == rowIDs[offset] }) else {
-                continue
-            }
-
-            switch result.failure {
-            case .none:
-                rows[index].status = .succeeded
-                rows[index].fraction = 1
-            case .some(.issue(let issue)):
-                rows[index].status = .failed(Self.message(for: issue))
-            case .some(.crypto(.wrongPassword)):
-                rows[index].status = .wrongPassword
-                passwordError = Self.message(for: AESCryptError.wrongPassword)
-            case .some(.crypto(.cancelled)):
-                rows[index].status = .cancelled
-            case .some(.crypto(let error)):
-                rows[index].status = .failed(Self.message(for: error))
-            }
-        }
-
-        overallProgress = 1
-        phase = .finished
+        dispatch(.results(results, rowIDs: rowIDs, generation: generation))
         cancellation = nil
     }
 
@@ -464,66 +381,39 @@ public final class BatchModel: ObservableObject {
             mode: mode,
             outputPolicy: .unique
         ) else {
+            // A mode that cannot plan the current inputs leaves them alone.
             return
         }
 
-        var newRows: [Row] = []
-        newRows.reserveCapacity(plan.items.count)
-        for (index, item) in plan.items.enumerated() {
-            let id = index < rows.count ? rows[index].id : UUID()
-            newRows.append(Row(id: id, item: item, status: .pending, fraction: 0))
-        }
+        dispatch(.installPlan(items: plan.items, mode: mode, notice: notice, rowIDs: rows.map(\.id)))
+    }
 
-        rows = newRows
-        phase = .ready
-        overallProgress = 0
-        errorMessage = nil
-        passwordError = nil
+    /// The only way the session changes: hand the current state and one event
+    /// to the reducer, keep the new state, then run whatever it asks for.
+    private func dispatch(_ event: BatchEvent) {
+        let (next, effects) = BatchReducer.reduce(state: state, event: event)
+        state = next
+
+        for effect in effects {
+            execute(effect)
+        }
+    }
+
+    private func execute(_ effect: BatchEffect) {
+        switch effect {
+        case .run(let plan, let password, let format, let hint, let generation):
+            beginRun(
+                plan: plan,
+                password: password,
+                format: format,
+                hint: hint,
+                generation: generation
+            )
+        }
     }
 
     private static func unreadableDropMessage(_ count: Int) -> String? {
         count > 0 ? "Could not read \(count) of the dropped files." : nil
-    }
-
-    /// The single failure predicate behind the retry button and the summary.
-    private static func countsAsFailure(_ status: RowStatus) -> Bool {
-        switch status {
-        case .failed, .wrongPassword: return true
-        case .pending, .running, .succeeded, .cancelled: return false
-        }
-    }
-
-    /// Trim the hint, treat blank text as no hint, then apply the product
-    /// length limit. The trimming rule is shared with the CLI through
-    /// ``AESPasswordHint/normalize(_:)``; the 256 cap is the product limit.
-    private static func normalizedHint(_ text: String) -> String? {
-        guard let trimmed = AESPasswordHint.normalize(text) else { return nil }
-        return String(trimmed.prefix(maximumHintLength))
-    }
-
-    private static func message(for error: Error) -> String {
-        if let issue = error as? AESCryptBatchIssue {
-            return issue.userMessage
-        }
-        if let aesError = error as? AESCryptError {
-            return message(for: aesError)
-        }
-        return error.localizedDescription
-    }
-
-    private static func message(for error: AESCryptError) -> String {
-        switch error {
-        case .wrongPassword:
-            return "Wrong password. Try again."
-        case .authenticationFailed:
-            return "The file is corrupt or was modified. Nothing was written."
-        case .outputExists:
-            return "An output file with that name already exists."
-        case .cancelled:
-            return "Cancelled."
-        default:
-            return error.errorDescription ?? "Something went wrong."
-        }
     }
 }
 
