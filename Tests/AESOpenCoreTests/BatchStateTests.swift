@@ -68,6 +68,25 @@ final class BatchStateTests: XCTestCase {
 
     // MARK: - Retry
 
+    func testRetryWithPendingRowsIsIgnored() {
+        var state = BatchState()
+        state.phase = .ready
+        state.password = "apples"
+        state.confirmation = "apples"
+        state.rows = [
+            row(item("pending.txt"), status: .pending),
+            row(item("failed.txt"), status: .failed("boom")),
+        ]
+
+        let (next, effects) = BatchReducer.reduce(
+            state: state,
+            event: .retry(items: [item("failed.txt")])
+        )
+
+        XCTAssertEqual(next, state)
+        XCTAssertTrue(effects.isEmpty)
+    }
+
     func testRetryWithoutPasswordIsIgnored() {
         var state = readyState(count: 2)
         state.phase = .finished
@@ -293,6 +312,23 @@ final class BatchStateTests: XCTestCase {
     }
 
     // MARK: - Install plan
+
+    func testInstallPlanMintsIDsForMissingRowIDs() {
+        let supplied = UUID()
+        let (next, effects) = BatchReducer.reduce(
+            state: BatchState(),
+            event: .installPlan(
+                items: [item("first.txt"), item("second.txt")],
+                mode: .encrypt,
+                notice: nil,
+                rowIDs: [supplied]
+            )
+        )
+
+        XCTAssertEqual(next.rows[0].id, supplied)
+        XCTAssertNotEqual(next.rows[1].id, supplied)
+        XCTAssertTrue(effects.isEmpty)
+    }
 
     func testInstallPlanReusesSuppliedRowIDs() {
         let ids = [UUID(), UUID()]

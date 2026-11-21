@@ -181,6 +181,7 @@ enum BatchReducer {
         case .retry(let items):
             guard state.phase == .finished || state.phase == .ready else { break }
             guard state.canRetry else { break }
+            guard state.rows.allSatisfy({ $0.status != .pending && $0.status != .running }) else { break }
             let failedCount = state.rows.filter { BatchState.countsAsFailure($0.status) }.count
             guard items.count == failedCount else { break }
 
