@@ -248,7 +248,8 @@ public final class BatchModel: ObservableObject {
                 .installPlan(
                     items: plan.items,
                     mode: desiredMode,
-                    notice: Self.unreadableDropMessage(unreadableCount)
+                    notice: Self.unreadableDropMessage(unreadableCount),
+                    rowIDs: nil
                 )
             )
         } catch {
@@ -384,7 +385,7 @@ public final class BatchModel: ObservableObject {
             return
         }
 
-        dispatch(.installPlan(items: plan.items, mode: mode, notice: notice))
+        dispatch(.installPlan(items: plan.items, mode: mode, notice: notice, rowIDs: rows.map(\.id)))
     }
 
     /// The only way the session changes: hand the current state and one event

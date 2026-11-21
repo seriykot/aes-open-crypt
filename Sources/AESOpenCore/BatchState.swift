@@ -120,7 +120,7 @@ struct BatchState: Equatable {
 
 /// Everything that can happen to a batch session.
 enum BatchEvent {
-    case installPlan(items: [AESCryptBatchItem], mode: AESCryptBatchMode, notice: String?)
+    case installPlan(items: [AESCryptBatchItem], mode: AESCryptBatchMode, notice: String?, rowIDs: [UUID]?)
     case start
     case retry(items: [AESCryptBatchItem])
     case cancel
@@ -145,11 +145,12 @@ enum BatchReducer {
         var effects: [BatchEffect] = []
 
         switch event {
-        case .installPlan(let items, let mode, let notice):
-            install(items: items, mode: mode, notice: notice, into: &state)
+        case .installPlan(let items, let mode, let notice, let rowIDs):
+            install(items: items, mode: mode, notice: notice, rowIDs: rowIDs, into: &state)
 
         case .start:
             guard state.canStart else { break }
+            guard state.rows.allSatisfy({ $0.status == .pending }) else { break }
             let plan = AESCryptBatchPlan(items: state.rows.map(\.item))
             guard !plan.items.isEmpty else { break }
 
@@ -319,10 +320,12 @@ enum BatchReducer {
         items: [AESCryptBatchItem],
         mode: AESCryptBatchMode,
         notice: String?,
+        rowIDs: [UUID]?,
         into state: inout BatchState
     ) {
-        state.rows = items.map {
-            BatchModel.Row(id: UUID(), item: $0, status: .pending, fraction: 0)
+        state.rows = items.enumerated().map { index, item in
+            let id = rowIDs.flatMap { $0.indices.contains(index) ? $0[index] : nil } ?? UUID()
+            return BatchModel.Row(id: id, item: item, status: .pending, fraction: 0)
         }
         state.phase = state.rows.isEmpty ? .idle : .ready
         state.mode = mode

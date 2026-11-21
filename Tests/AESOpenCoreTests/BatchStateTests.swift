@@ -53,6 +53,19 @@ final class BatchStateTests: XCTestCase {
         XCTAssertTrue(effects.isEmpty)
     }
 
+    func testStartWithNonPendingRowIsIgnored() {
+        var state = BatchState()
+        state.phase = .ready
+        state.password = "apples"
+        state.confirmation = "apples"
+        state.rows = [row(item("done.txt"), status: .succeeded)]
+
+        let (next, effects) = BatchReducer.reduce(state: state, event: .start)
+
+        XCTAssertEqual(next, state)
+        XCTAssertTrue(effects.isEmpty)
+    }
+
     // MARK: - Retry
 
     func testRetryWithoutPasswordIsIgnored() {
@@ -281,6 +294,22 @@ final class BatchStateTests: XCTestCase {
 
     // MARK: - Install plan
 
+    func testInstallPlanReusesSuppliedRowIDs() {
+        let ids = [UUID(), UUID()]
+        let (next, effects) = BatchReducer.reduce(
+            state: BatchState(),
+            event: .installPlan(
+                items: [item("first.txt"), item("second.txt")],
+                mode: .encrypt,
+                notice: nil,
+                rowIDs: ids
+            )
+        )
+
+        XCTAssertEqual(next.rows.map(\.id), ids)
+        XCTAssertTrue(effects.isEmpty)
+    }
+
     func testInstallPlanResetsRowsAndKeepsCredentials() {
         var state = BatchState()
         state.password = "apples"
@@ -297,7 +326,8 @@ final class BatchStateTests: XCTestCase {
             event: .installPlan(
                 items: plan,
                 mode: .encrypt,
-                notice: "Could not read 2 of the dropped files."
+                notice: "Could not read 2 of the dropped files.",
+                rowIDs: nil
             )
         )
 
@@ -314,7 +344,7 @@ final class BatchStateTests: XCTestCase {
 
         let empty = BatchReducer.reduce(
             state: state,
-            event: .installPlan(items: [], mode: .decrypt, notice: nil)
+            event: .installPlan(items: [], mode: .decrypt, notice: nil, rowIDs: nil)
         )
         XCTAssertEqual(empty.0.phase, .idle)
         XCTAssertTrue(empty.0.rows.isEmpty)

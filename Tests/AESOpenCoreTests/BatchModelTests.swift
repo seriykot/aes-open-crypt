@@ -250,10 +250,12 @@ final class BatchModelTests: XCTestCase {
         XCTAssertEqual(model.rows.count, 1)
         XCTAssertEqual(model.mode, .encrypt)
         XCTAssertNil(model.rows[0].item.issue)
+        let rowID = model.rows[0].id
 
         model.mode = .decrypt
 
         XCTAssertEqual(model.rows.count, 1)
+        XCTAssertEqual(model.rows[0].id, rowID)
         XCTAssertEqual(model.mode, .decrypt)
         XCTAssertEqual(model.rows[0].item.issue, .notEncrypted)
     }
