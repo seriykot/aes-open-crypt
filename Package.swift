@@ -12,7 +12,8 @@ let package = Package(
     targets: [
         .target(name: "AESCryptKit"),
         .target(name: "AESOpenCore", dependencies: ["AESCryptKit"]),
-        .executableTarget(name: "aesopen", dependencies: ["AESCryptKit"]),
+        .target(name: "AESOpenCLI", dependencies: ["AESCryptKit"]),
+        .executableTarget(name: "aesopen", dependencies: ["AESOpenCLI"]),
         .executableTarget(name: "AESOpenCrypt", dependencies: ["AESCryptKit", "AESOpenCore"]),
         .testTarget(
             name: "AESCryptKitTests",
@@ -22,6 +23,10 @@ let package = Package(
         .testTarget(
             name: "AESOpenCoreTests",
             dependencies: ["AESOpenCore", "AESCryptKit"]
+        ),
+        .testTarget(
+            name: "AESOpenCLITests",
+            dependencies: ["AESOpenCLI", "AESCryptKit"]
         ),
     ],
     swiftLanguageModes: [.v5]

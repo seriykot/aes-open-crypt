@@ -178,6 +178,49 @@ run_expect 5 "$BIN" encrypt --password "$PW" "$WORK/exists/s.txt"
 [ "$(cat "$WORK/exists/s.txt.aes")" = 'sentinel' ] || fail "an existing output was overwritten"
 ok "an existing output exits 5 and keeps its bytes"
 
+# ------------------------------------------------------------- explicit output
+
+mkdir -p "$WORK/output" "$WORK/output/folder"
+printf 'explicit output payload\n' >"$WORK/output/t.txt"
+printf 'sentinel bytes\n' >"$WORK/output/existing.aes"
+
+run_expect 5 "$BIN" encrypt --password "$PW" -o "$WORK/output/existing.aes" "$WORK/output/t.txt"
+[ "$(cat "$WORK/output/existing.aes")" = 'sentinel bytes' ] || fail "-o overwrote an existing output"
+[ -z "$(find "$WORK/output" -name '.aesopen-*' -print -quit)" ] || fail "-o left a temporary file behind"
+ok "-o with an existing output exits 5 and keeps its bytes"
+
+BEFORE="$(shasum -a 256 "$WORK/output/t.txt")"
+run_expect 5 "$BIN" encrypt --password "$PW" -o "$WORK/output/t.txt" "$WORK/output/t.txt"
+[ "$(shasum -a 256 "$WORK/output/t.txt")" = "$BEFORE" ] || fail "-o pointing at its own input changed the file"
+ok "-o pointing at its own input exits 5 and leaves the file alone"
+
+run_expect 5 "$BIN" encrypt --password "$PW" -o "$WORK/output/folder.aes" "$WORK/output/folder"
+[ ! -e "$WORK/output/folder.aes" ] || fail "-o created an output for a folder input"
+ok "-o with a folder input exits 5 and writes nothing"
+
+run_expect 0 "$BIN" encrypt --password "$PW" -o "$WORK/output/exact.aes" "$WORK/output/t.txt"
+[ -f "$WORK/output/exact.aes" ] || fail "-o did not write the exact output path"
+[ "$(cat "$WORK/stdout")" = "$WORK/output/exact.aes" ] || fail "-o did not print the exact output path"
+mkdir -p "$WORK/output/back"
+cp "$WORK/output/exact.aes" "$WORK/output/back/exact.aes"
+run_expect 0 "$BIN" decrypt --password "$PW" -o "$WORK/output/back/plain.txt" "$WORK/output/back/exact.aes"
+cmp "$WORK/output/t.txt" "$WORK/output/back/plain.txt" || fail "-o decrypt round trip failed"
+ok "-o writes the exact path, prints it, and decrypts back to the original"
+
+run_expect 0 "$BIN" encrypt --password "$PW" "$WORK/output/t.txt"
+[ -f "$WORK/output/t.txt.aes" ] || fail "the plain encrypt run did not produce t.txt.aes"
+run_expect 3 "$BIN" encrypt --password "$PW" -o "$WORK/output/double.aes" "$WORK/output/t.txt.aes"
+[ ! -e "$WORK/output/double.aes" ] || fail "-o encrypted an already-encrypted file"
+ok "-o rejects an already-encrypted input for encrypt"
+
+# -------------------------------------------------------------- empty password
+
+printf 'empty password payload\n' >"$WORK/output/empty.txt"
+run_expect 1 "$BIN" encrypt --password "" "$WORK/output/empty.txt"
+[ ! -e "$WORK/output/empty.txt.aes" ] || fail "--password '' still wrote an output"
+grep -q 'password' "$WORK/stderr" || fail "--password '' does not mention the password"
+ok "--password '' is a usage error and writes nothing"
+
 # ---------------------------------------------------------------- exit priority
 
 mkdir -p "$WORK/priority"

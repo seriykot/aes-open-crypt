@@ -29,7 +29,11 @@ public struct AESCryptBatchItem: Sendable, Equatable {
     public let info: AESFileInfo?
     public let issue: AESCryptBatchIssue?
 
-    public init(
+    /// Items are made by the planner, which is the only thing that knows the
+    /// rules for an output name and an issue. Plans are still public to build
+    /// (`AESCryptBatchPlan.init(items:)`), so frontends can keep presenting
+    /// them; they just cannot invent an item that skipped planning.
+    init(
         input: URL,
         output: URL,
         mode: AESCryptBatchMode,
@@ -81,6 +85,30 @@ public enum AESCryptBatch {
         return AESCryptBatchPlan(items: items)
     }
 
+    /// Plan a single file that must land on an exact output path.
+    ///
+    /// This runs the same checks a batch runs — folder, already encrypted,
+    /// not encrypted, same file, existing output — but against the requested
+    /// destination instead of a derived name, and with `.strict` so an
+    /// existing destination is never renamed around. Nothing is thrown: a
+    /// rejected file comes back as a one-item plan carrying its issue, which
+    /// is what the CLI reports before it asks for a password.
+    public static func planSingle(
+        input: URL,
+        output: URL,
+        mode: AESCryptBatchMode
+    ) -> AESCryptBatchPlan {
+        var reserved = Set<String>()
+        let item = planItem(
+            url: input,
+            mode: mode,
+            outputPolicy: .strict,
+            reserved: &reserved,
+            explicitOutput: output
+        )
+        return AESCryptBatchPlan(items: [item])
+    }
+
     private static func deduplicate(_ urls: [URL]) -> [URL] {
         var seen = Set<String>()
         var unique: [URL] = []
@@ -105,14 +133,15 @@ public enum AESCryptBatch {
         url: URL,
         mode: AESCryptBatchMode?,
         outputPolicy: AESCryptBatchOutputPolicy,
-        reserved: inout Set<String>
+        reserved: inout Set<String>,
+        explicitOutput: URL? = nil
     ) -> AESCryptBatchItem {
         let isDirectory = (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false
         if isDirectory {
             let plannedMode = mode ?? .encrypt
             return AESCryptBatchItem(
                 input: url,
-                output: outputURL(for: url, mode: plannedMode),
+                output: explicitOutput ?? outputURL(for: url, mode: plannedMode),
                 mode: plannedMode,
                 issue: .notAFile
             )
@@ -152,7 +181,7 @@ public enum AESCryptBatch {
             issue = .alreadyEncrypted
         }
 
-        let output = outputURL(for: url, mode: plannedMode)
+        let output = explicitOutput ?? outputURL(for: url, mode: plannedMode)
 
         if issue == nil,
            let inputIdentity = FileSafety.identity(of: url),

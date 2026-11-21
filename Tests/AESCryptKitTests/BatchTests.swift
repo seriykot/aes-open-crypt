@@ -168,6 +168,97 @@ final class BatchTests: XCTestCase {
         XCTAssertNil(plan.items.first?.issue)
     }
 
+    func testPlanSingleKeepsExplicitOutput() throws {
+        let directory = try makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let input = directory.appendingPathComponent("notes.txt")
+        let output = directory.appendingPathComponent("chosen/name.out")
+        try Data("plain".utf8).write(to: input)
+
+        let plan = AESCryptBatch.planSingle(input: input, output: output, mode: .encrypt)
+
+        XCTAssertEqual(plan.items.count, 1)
+        XCTAssertEqual(plan.items.first?.input, input)
+        XCTAssertEqual(plan.items.first?.output, output)
+        XCTAssertEqual(plan.items.first?.mode, .encrypt)
+        XCTAssertNil(plan.items.first?.issue)
+        XCTAssertEqual(plan.runnableItems.count, 1)
+    }
+
+    func testPlanSingleRejectsExistingOutput() throws {
+        let directory = try makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let input = directory.appendingPathComponent("notes.txt")
+        let output = directory.appendingPathComponent("chosen.out")
+        try Data("plain".utf8).write(to: input)
+        try Data("sentinel".utf8).write(to: output)
+
+        let plan = AESCryptBatch.planSingle(input: input, output: output, mode: .encrypt)
+
+        XCTAssertEqual(plan.items.first?.issue, .outputExists(output.path))
+        XCTAssertTrue(plan.runnableItems.isEmpty)
+        XCTAssertEqual(try Data(contentsOf: output), Data("sentinel".utf8))
+    }
+
+    func testPlanSingleRejectsAlreadyEncryptedInput() throws {
+        let directory = try makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let input = directory.appendingPathComponent("secret.aes")
+        let output = directory.appendingPathComponent("double.aes")
+        try FileManager.default.copyItem(at: try fixture("v2-hello"), to: input)
+
+        let plan = AESCryptBatch.planSingle(input: input, output: output, mode: .encrypt)
+
+        XCTAssertEqual(plan.items.first?.issue, .alreadyEncrypted)
+        XCTAssertTrue(plan.runnableItems.isEmpty)
+    }
+
+    func testPlanSingleRejectsPlainInputForDecrypt() throws {
+        let directory = try makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let input = directory.appendingPathComponent("notes.txt")
+        let output = directory.appendingPathComponent("notes.out")
+        try Data("plain".utf8).write(to: input)
+
+        let plan = AESCryptBatch.planSingle(input: input, output: output, mode: .decrypt)
+
+        XCTAssertEqual(plan.items.first?.issue, .notEncrypted)
+        XCTAssertTrue(plan.runnableItems.isEmpty)
+    }
+
+    func testPlanSingleRejectsSameFile() throws {
+        let directory = try makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let input = directory.appendingPathComponent("secret.aes")
+        let output = directory.appendingPathComponent("secret")
+        try FileManager.default.copyItem(at: try fixture("v2-hello"), to: input)
+        try FileManager.default.linkItem(at: input, to: output)
+
+        let plan = AESCryptBatch.planSingle(input: input, output: output, mode: .decrypt)
+
+        XCTAssertEqual(plan.items.first?.issue, .sameFile)
+        XCTAssertTrue(plan.runnableItems.isEmpty)
+    }
+
+    func testPlanSingleRejectsFolder() throws {
+        let directory = try makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let input = directory.appendingPathComponent("folder")
+        let output = directory.appendingPathComponent("folder.aes")
+        try FileManager.default.createDirectory(at: input, withIntermediateDirectories: true)
+
+        let plan = AESCryptBatch.planSingle(input: input, output: output, mode: .encrypt)
+
+        XCTAssertEqual(plan.items.first?.issue, .notAFile)
+        XCTAssertTrue(plan.runnableItems.isEmpty)
+    }
+
     func testRunProcessesAllFiles() throws {
         let directory = try makeDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
