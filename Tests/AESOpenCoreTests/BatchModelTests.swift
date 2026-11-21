@@ -717,6 +717,135 @@ final class BatchModelTests: XCTestCase {
         return false
     }
 
+    // MARK: - Planned output
+
+    func testCurrentPlanMatchesRows() throws {
+        let directory = try makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let first = directory.appendingPathComponent("first.txt")
+        let second = directory.appendingPathComponent("second.txt")
+        try Data("first\n".utf8).write(to: first)
+        try Data("second\n".utf8).write(to: second)
+
+        let model = BatchModel()
+        model.add(urls: [first, second], preferredMode: .encrypt)
+
+        XCTAssertEqual(model.currentPlan.items, model.rows.map(\.item))
+        XCTAssertEqual(model.currentPlan.items.map(\.input), [first, second])
+        XCTAssertEqual(
+            model.currentPlan.items.map(\.output),
+            [first.appendingPathExtension("aes"), second.appendingPathExtension("aes")]
+        )
+    }
+
+    func testStartUsesPlannedOutputWhenAConflictAppears() async throws {
+        let directory = try makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let plain = directory.appendingPathComponent("notes.txt")
+        try Data("plain\n".utf8).write(to: plain)
+
+        let model = BatchModel()
+        model.add(urls: [plain], preferredMode: .encrypt)
+        XCTAssertEqual(model.rows.count, 1)
+        let planned = model.rows[0].item.output
+
+        // Something lands on the planned output between add and Start.
+        let sentinel = Data("already here\n".utf8)
+        try sentinel.write(to: planned)
+
+        model.password = "apples"
+        model.confirmation = "apples"
+        XCTAssertTrue(model.canStart)
+
+        model.start()
+        await model.activeTask?.value
+
+        XCTAssertEqual(model.phase, .finished)
+        XCTAssertEqual(model.rows.count, 1)
+        XCTAssertEqual(
+            model.rows[0].status,
+            .failed("An output file with that name already exists.")
+        )
+        XCTAssertEqual(try Data(contentsOf: planned), sentinel)
+        XCTAssertEqual(model.rows[0].item.output, planned)
+        XCTAssertFalse(
+            FileManager.default.fileExists(
+                atPath: directory.appendingPathComponent("notes.txt (1).aes").path
+            ),
+            "Start must not rename around a conflict"
+        )
+    }
+
+    func testStartDoesNotRenameOutputAfterInputChanges() async throws {
+        let directory = try makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let plain = directory.appendingPathComponent("notes.txt")
+        try Data("plain\n".utf8).write(to: plain)
+
+        let model = BatchModel()
+        model.add(urls: [plain], preferredMode: .encrypt)
+        let planned = model.rows[0].item.output
+
+        // The input goes away between add and Start.
+        try FileManager.default.moveItem(
+            at: plain,
+            to: directory.appendingPathComponent("moved.txt")
+        )
+
+        model.password = "apples"
+        model.confirmation = "apples"
+        XCTAssertTrue(model.canStart)
+
+        model.start()
+        await model.activeTask?.value
+
+        XCTAssertEqual(model.phase, .finished)
+        XCTAssertEqual(model.rows.count, 1)
+        XCTAssertTrue(isFailed(model.rows[0].status))
+        XCTAssertEqual(model.rows[0].item.output, planned)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: planned.path))
+    }
+
+    func testRetryReplansFailedRowsAroundAConflict() async throws {
+        let directory = try makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let plain = directory.appendingPathComponent("notes.txt")
+        try Data("plain\n".utf8).write(to: plain)
+
+        let model = BatchModel()
+        model.add(urls: [plain], preferredMode: .encrypt)
+        let planned = model.rows[0].item.output
+
+        try Data("already here\n".utf8).write(to: planned)
+        model.password = "apples"
+        model.confirmation = "apples"
+        model.start()
+        await model.activeTask?.value
+        XCTAssertEqual(
+            model.rows[0].status,
+            .failed("An output file with that name already exists.")
+        )
+
+        model.password = "apples"
+        model.confirmation = "apples"
+        model.retryFailed()
+        await model.activeTask?.value
+
+        let replanned = planned
+            .deletingLastPathComponent()
+            .appendingPathComponent("notes.txt (1).aes")
+        XCTAssertEqual(model.phase, .finished)
+        XCTAssertEqual(model.rows[0].status, .succeeded)
+        XCTAssertEqual(model.rows[0].item.output, replanned)
+        XCTAssertEqual(model.completedOutputs, [replanned])
+        XCTAssertEqual(try Data(contentsOf: planned), Data("already here\n".utf8))
+        XCTAssertNoThrow(try AESCrypt.inspect(url: replanned))
+    }
+
     // MARK: - Outcome rules
 
     func testCanRetryRequiresPasswordAndMatchingConfirmation() throws {
