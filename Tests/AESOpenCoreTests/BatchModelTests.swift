@@ -809,7 +809,7 @@ final class BatchModelTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: planned.path))
     }
 
-    func testRetryUsesFreshOutputAfterConflictRemoved() async throws {
+    func testRetryReplansFailedRowsAroundAConflict() async throws {
         let directory = try makeDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
 
@@ -820,8 +820,6 @@ final class BatchModelTests: XCTestCase {
         model.add(urls: [plain], preferredMode: .encrypt)
         let planned = model.rows[0].item.output
 
-        // The conflict makes the row fail at Start, because Start runs the
-        // plan the row already holds.
         try Data("already here\n".utf8).write(to: planned)
         model.password = "apples"
         model.confirmation = "apples"
@@ -832,18 +830,20 @@ final class BatchModelTests: XCTestCase {
             .failed("An output file with that name already exists.")
         )
 
-        // A retry is an explicit refresh: with the conflict gone it plans the
-        // row again and writes the same output path.
-        try FileManager.default.removeItem(at: planned)
         model.password = "apples"
+        model.confirmation = "apples"
         model.retryFailed()
         await model.activeTask?.value
 
+        let replanned = planned
+            .deletingLastPathComponent()
+            .appendingPathComponent("notes.txt (1).aes")
         XCTAssertEqual(model.phase, .finished)
         XCTAssertEqual(model.rows[0].status, .succeeded)
-        XCTAssertEqual(model.rows[0].item.output, planned)
-        XCTAssertEqual(model.completedOutputs, [planned])
-        XCTAssertNoThrow(try AESCrypt.inspect(url: planned))
+        XCTAssertEqual(model.rows[0].item.output, replanned)
+        XCTAssertEqual(model.completedOutputs, [replanned])
+        XCTAssertEqual(try Data(contentsOf: planned), Data("already here\n".utf8))
+        XCTAssertNoThrow(try AESCrypt.inspect(url: replanned))
     }
 
     // MARK: - Outcome rules
