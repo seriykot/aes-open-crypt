@@ -497,9 +497,11 @@ public final class BatchModel: ObservableObject {
         }
     }
 
+    /// Trim the hint, treat blank text as no hint, then apply the product
+    /// length limit. The trimming rule is shared with the CLI through
+    /// ``AESPasswordHint/normalize(_:)``; the 256 cap is the product limit.
     private static func normalizedHint(_ text: String) -> String? {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return nil }
+        guard let trimmed = AESPasswordHint.normalize(text) else { return nil }
         return String(trimmed.prefix(maximumHintLength))
     }
 
