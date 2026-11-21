@@ -313,9 +313,9 @@ Run on a real desktop in both light and dark mode (System Settings → Appearanc
    width. Hover the question mark to see the format explanation. Run
    `swift test --filter ThemePaletteTests` to check the contrast floors.
 
-5. **Batch states.** Check each state in both modes: empty; one file; ten
-   files; mixed drop (the notice
-   **Drop plain files or encrypted files separately**; no rows added);
+5. **Batch states.** Check each state: empty; one file; ten files; mixed
+   drop (the notice **Drop plain files or encrypted files separately**; no
+   rows added);
    working with percent; cancel; finished with the summary (the summary row
    with **Show in Finder** and **Done** sits between the file card and the
    password fields); weak password (an amber suggestion under the password
@@ -325,7 +325,10 @@ Run on a real desktop in both light and dark mode (System Settings → Appearanc
    file (amber issue text); invalid `.aes`; eleven files (**Maximum of 10
    files at a time is allowed.**). After a successful batch the password,
    hint, and format form is hidden; it returns before starting and when a
-   retry is possible. On a fresh launch the Format picker starts on **Strong
+   retry is possible. After a finished batch, dropping a uniform new set
+   starts a new batch with only the new files; a mixed drop shows the notice
+   and leaves the finished rows in place. On a fresh launch the Format picker
+   starts on **Strong
    (v3)**; choosing **Compatible (v2)** persists after quit and relaunch.
 
 6. **Accessibility.** With VoiceOver, the eye buttons announce **Show

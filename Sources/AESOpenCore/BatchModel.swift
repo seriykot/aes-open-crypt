@@ -151,11 +151,11 @@ public final class BatchModel: ObservableObject {
             return
         }
 
-        let combined = rows.map(\.item.input) + urls
+        let planInputs = phase == .finished ? urls : rows.map(\.item.input) + urls
 
         do {
             let plan = try AESCryptBatch.plan(
-                urls: combined,
+                urls: planInputs,
                 mode: preferredMode,
                 outputPolicy: .unique
             )
@@ -169,6 +169,7 @@ public final class BatchModel: ObservableObject {
             if preferredMode == nil,
                plannedModes.contains(.encrypt),
                plannedModes.contains(.decrypt) {
+                errorMessage = nil
                 notice = Self.mixedDropNotice
                 return
             }
