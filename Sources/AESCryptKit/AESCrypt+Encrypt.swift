@@ -82,7 +82,7 @@ extension AESCrypt {
         var header = Data([0x41, 0x45, 0x53, version.rawValue, 0x00])
         let createdBy = Data("aes-open-crypt \(AESOpenVersion.current)".utf8)
         header.append(try extensionBlock(identifier: "CREATED_BY", value: createdBy))
-        if let hint = normalizedHint(hint) {
+        if let hint = AESPasswordHint.normalize(hint) {
             header.append(
                 try extensionBlock(
                     identifier: AESPasswordHint.extensionIdentifier,
@@ -160,12 +160,6 @@ private func validateIterations(_ iterations: UInt32, for version: AESFormatVers
     if version == .v3, !(1...5_000_000).contains(iterations) {
         throw AESCryptError.corrupt("KDF iteration count is out of range")
     }
-}
-
-private func normalizedHint(_ hint: String?) -> String? {
-    guard let hint else { return nil }
-    let trimmed = hint.trimmingCharacters(in: .whitespacesAndNewlines)
-    return trimmed.isEmpty ? nil : trimmed
 }
 
 private func extensionBlock(identifier: String, value: Data) throws -> Data {
