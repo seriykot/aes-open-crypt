@@ -2,6 +2,18 @@ import AESCryptKit
 import Combine
 import Foundation
 
+/// The one line shown when a batch stops: what happened, and whether it is
+/// worth a warning colour.
+public struct BatchSummary: Equatable {
+    public let text: String
+    public let isWarning: Bool
+
+    init(text: String, isWarning: Bool) {
+        self.text = text
+        self.isWarning = isWarning
+    }
+}
+
 @MainActor
 public final class BatchModel: ObservableObject {
     public enum Phase: Equatable {
@@ -127,6 +139,42 @@ public final class BatchModel: ObservableObject {
         rows.compactMap { row in
             row.status == .succeeded ? row.item.output : nil
         }
+    }
+
+    /// Whether any row ended in a failure: a planning issue or a wrong
+    /// password. Cancelled rows are not failures.
+    public var hasFailedRows: Bool {
+        rows.contains { Self.countsAsFailure($0.status) }
+    }
+
+    /// Whether any row failed specifically because of a wrong password, which
+    /// is the case the GUI offers to retry in place.
+    public var hasWrongPasswordRows: Bool {
+        rows.contains { $0.status == .wrongPassword }
+    }
+
+    /// Whether a retry could start right now. The rules match ``canStart``:
+    /// a failed row, a password, and — when encrypting — a matching
+    /// confirmation.
+    public var canRetry: Bool {
+        guard hasFailedRows, !password.isEmpty else { return false }
+        guard mode == .encrypt else { return true }
+        return password == confirmation
+    }
+
+    /// The one line describing how a finished batch ended, or nil when no row
+    /// finished or failed yet.
+    public var finishedSummary: BatchSummary? {
+        let completed = completedOutputs.count
+        let failed = rows.filter { Self.countsAsFailure($0.status) }.count
+        guard !rows.isEmpty, completed + failed > 0 else { return nil }
+
+        if failed == 0 {
+            let files = completed == 1 ? "file" : "files"
+            let action = mode == .decrypt ? "decrypted" : "encrypted"
+            return BatchSummary(text: "\(completed) \(files) \(action)", isWarning: false)
+        }
+        return BatchSummary(text: "\(completed) finished, \(failed) failed", isWarning: true)
     }
 
     public func add(
@@ -255,12 +303,7 @@ public final class BatchModel: ObservableObject {
     public func retryFailed() {
         guard phase == .finished || phase == .ready else { return }
 
-        let failedRows = rows.filter { row in
-            switch row.status {
-            case .failed, .wrongPassword: return true
-            case .pending, .running, .succeeded, .cancelled: return false
-            }
-        }
+        let failedRows = rows.filter { Self.countsAsFailure($0.status) }
         guard !failedRows.isEmpty else { return }
 
         let plan: AESCryptBatchPlan
@@ -444,6 +487,14 @@ public final class BatchModel: ObservableObject {
 
     private static func unreadableDropMessage(_ count: Int) -> String? {
         count > 0 ? "Could not read \(count) of the dropped files." : nil
+    }
+
+    /// The single failure predicate behind the retry button and the summary.
+    private static func countsAsFailure(_ status: RowStatus) -> Bool {
+        switch status {
+        case .failed, .wrongPassword: return true
+        case .pending, .running, .succeeded, .cancelled: return false
+        }
     }
 
     private static func normalizedHint(_ text: String) -> String? {

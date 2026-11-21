@@ -717,6 +717,162 @@ final class BatchModelTests: XCTestCase {
         return false
     }
 
+    // MARK: - Outcome rules
+
+    func testCanRetryRequiresPasswordAndMatchingConfirmation() throws {
+        let directory = try makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let first = directory.appendingPathComponent("first.txt")
+        let second = directory.appendingPathComponent("second.txt")
+        try Data("first\n".utf8).write(to: first)
+        try Data("second\n".utf8).write(to: second)
+
+        let model = BatchModel()
+        model.add(urls: [first, second], preferredMode: .encrypt)
+        XCTAssertEqual(model.mode, .encrypt)
+        finish(model, failures: [nil, .crypto(.io("disk full"))])
+
+        XCTAssertTrue(model.hasFailedRows)
+        XCTAssertFalse(model.canRetry, "an empty password cannot retry")
+
+        model.password = "apples"
+        XCTAssertFalse(model.canRetry, "encrypt needs a matching confirmation")
+
+        model.confirmation = "pears"
+        XCTAssertFalse(model.canRetry, "a mismatched confirmation cannot retry")
+
+        model.confirmation = "apples"
+        XCTAssertTrue(model.canRetry)
+
+        model.password = ""
+        model.confirmation = ""
+        XCTAssertFalse(model.canRetry)
+
+        // Decrypt retries need a password but no confirmation.
+        let decryptModel = BatchModel()
+        decryptModel.add(urls: [first, second], preferredMode: .decrypt)
+        XCTAssertEqual(decryptModel.mode, .decrypt)
+        finish(decryptModel, failures: [nil, .crypto(.wrongPassword)])
+
+        XCTAssertTrue(decryptModel.hasFailedRows)
+        XCTAssertFalse(decryptModel.canRetry)
+        decryptModel.password = "apples"
+        XCTAssertTrue(decryptModel.canRetry)
+
+        // Without a failed row there is nothing to retry, even with a password.
+        let cleanModel = BatchModel()
+        cleanModel.add(urls: [first, second], preferredMode: .encrypt)
+        finish(cleanModel, failures: [nil, nil])
+        cleanModel.password = "apples"
+        cleanModel.confirmation = "apples"
+        XCTAssertFalse(cleanModel.hasFailedRows)
+        XCTAssertFalse(cleanModel.canRetry)
+    }
+
+    func testFinishedSummaryCountsMixedOutcomes() throws {
+        let directory = try makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let first = directory.appendingPathComponent("first.txt")
+        let second = directory.appendingPathComponent("second.txt")
+        try Data("first\n".utf8).write(to: first)
+        try Data("second\n".utf8).write(to: second)
+
+        let empty = BatchModel()
+        XCTAssertNil(empty.finishedSummary, "an empty batch has no summary")
+
+        let encryptModel = BatchModel()
+        encryptModel.add(urls: [first, second], preferredMode: .encrypt)
+        finish(encryptModel, failures: [nil, nil])
+        XCTAssertEqual(
+            encryptModel.finishedSummary,
+            BatchSummary(text: "2 files encrypted", isWarning: false)
+        )
+
+        finish(encryptModel, failures: [nil, .issue(.notEncrypted)])
+        XCTAssertEqual(
+            encryptModel.finishedSummary,
+            BatchSummary(text: "1 finished, 1 failed", isWarning: true)
+        )
+
+        let single = BatchModel()
+        single.add(urls: [first], preferredMode: .encrypt)
+        finish(single, failures: [nil])
+        XCTAssertEqual(
+            single.finishedSummary,
+            BatchSummary(text: "1 file encrypted", isWarning: false)
+        )
+
+        let decryptModel = BatchModel()
+        decryptModel.add(urls: [first], preferredMode: .decrypt)
+        finish(decryptModel, failures: [nil])
+        XCTAssertEqual(
+            decryptModel.finishedSummary,
+            BatchSummary(text: "1 file decrypted", isWarning: false)
+        )
+
+        // A wrong password counts as a failure in the summary.
+        finish(decryptModel, failures: [.crypto(.wrongPassword)])
+        XCTAssertEqual(
+            decryptModel.finishedSummary,
+            BatchSummary(text: "0 finished, 1 failed", isWarning: true)
+        )
+
+        // Cancelled rows are neither finished nor failed, so there is no
+        // summary for a run that produced nothing.
+        let cancelledModel = BatchModel()
+        cancelledModel.add(urls: [first, second], preferredMode: .encrypt)
+        finish(cancelledModel, failures: [.crypto(.cancelled), .crypto(.cancelled)])
+        XCTAssertNil(cancelledModel.finishedSummary)
+    }
+
+    func testHasWrongPasswordRowsOnlyCountsWrongPassword() throws {
+        let directory = try makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let first = directory.appendingPathComponent("first.txt")
+        let second = directory.appendingPathComponent("second.txt")
+        try Data("first\n".utf8).write(to: first)
+        try Data("second\n".utf8).write(to: second)
+
+        let model = BatchModel()
+        model.add(urls: [first, second], preferredMode: .encrypt)
+
+        finish(model, failures: [nil, .issue(.notAFile)])
+        XCTAssertTrue(model.hasFailedRows)
+        XCTAssertFalse(model.hasWrongPasswordRows)
+
+        finish(model, failures: [.issue(.notAFile), .crypto(.wrongPassword)])
+        XCTAssertTrue(model.hasFailedRows)
+        XCTAssertTrue(model.hasWrongPasswordRows)
+
+        finish(model, failures: [nil, .crypto(.io("disk full"))])
+        XCTAssertTrue(model.hasFailedRows)
+        XCTAssertFalse(model.hasWrongPasswordRows)
+
+        finish(model, failures: [nil, .crypto(.cancelled)])
+        XCTAssertFalse(model.hasFailedRows, "a cancelled row is not a failure")
+        XCTAssertFalse(model.hasWrongPasswordRows)
+
+        finish(model, failures: [nil, nil])
+        XCTAssertFalse(model.hasFailedRows)
+        XCTAssertFalse(model.hasWrongPasswordRows)
+    }
+
+    /// Apply synthetic results to every current row, so a test can finish a
+    /// batch with exactly the outcomes it wants without doing real I/O.
+    private func finish(_ model: BatchModel, failures: [AESCryptBatchFailure?]) {
+        let rows = model.rows
+        let results = rows.enumerated().map { index, row in
+            AESCryptBatchResult(
+                item: row.item,
+                failure: index < failures.count ? failures[index] : nil
+            )
+        }
+        model.applyResults(results, rowIDs: rows.map(\.id), generation: model.runGeneration)
+    }
+
     private func makeEncryptedFile(
         in directory: URL,
         name: String,

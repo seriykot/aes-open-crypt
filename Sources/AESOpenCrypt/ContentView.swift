@@ -31,7 +31,7 @@ struct ContentView: View {
             }
 
             if !model.rows.isEmpty,
-               model.phase == .ready || (model.phase == .finished && hasFailedRows) {
+               model.phase == .ready || (model.phase == .finished && model.hasFailedRows) {
                 form
             }
 
@@ -454,7 +454,7 @@ struct ContentView: View {
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
                 .tint(Theme.accentFill)
-                .disabled(!canRetry)
+                .disabled(!model.canRetry)
                 .keyboardShortcut(.defaultAction)
                 .padding(.top, 2)
             }
@@ -487,7 +487,7 @@ struct ContentView: View {
 
     private var finishedActions: some View {
         HStack(spacing: 10) {
-            if let summary = finishedSummary {
+            if let summary = model.finishedSummary {
                 HStack(spacing: 5) {
                     Image(systemName: summary.isWarning ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
                         .foregroundStyle(summary.isWarning ? Theme.danger : Theme.successIcon)
@@ -508,12 +508,12 @@ struct ContentView: View {
                 .buttonStyle(.borderedProminent)
                 .tint(Theme.accentFill)
             }
-            if hasFailedRows {
+            if model.hasFailedRows {
                 Button("Retry Failed") {
                     model.retryFailed()
                 }
                 .buttonStyle(.bordered)
-                .disabled(!canRetry)
+                .disabled(!model.canRetry)
             }
             Button("Done") {
                 model.clear()
@@ -523,49 +523,8 @@ struct ContentView: View {
         }
     }
 
-    private var finishedSummary: (text: String, isWarning: Bool)? {
-        let completed = model.completedOutputs.count
-        let failed = model.rows.filter { row in
-            switch row.status {
-            case .failed, .wrongPassword: return true
-            case .pending, .running, .succeeded, .cancelled: return false
-            }
-        }.count
-        guard model.rows.isEmpty == false, completed + failed > 0 else { return nil }
-
-        if failed == 0 {
-            let files = completed == 1 ? "file" : "files"
-            return (model.mode == .decrypt ? "\(completed) \(files) decrypted" : "\(completed) \(files) encrypted", false)
-        }
-        return ("\(completed) finished, \(failed) failed", true)
-    }
-
-    private var hasFailedRows: Bool {
-        model.rows.contains { row in
-            switch row.status {
-            case .failed, .wrongPassword: return true
-            case .pending, .running, .succeeded, .cancelled: return false
-            }
-        }
-    }
-
-    private var hasWrongPasswordRows: Bool {
-        model.rows.contains { row in
-            if case .wrongPassword = row.status { return true }
-            return false
-        }
-    }
-
     private var showsInlineRetry: Bool {
-        model.phase == .finished && hasWrongPasswordRows
-    }
-
-    private var canRetry: Bool {
-        guard hasFailedRows, !model.password.isEmpty else { return false }
-        if model.mode == .encrypt {
-            return model.password == model.confirmation
-        }
-        return true
+        model.phase == .finished && model.hasWrongPasswordRows
     }
 
     private func errorBanner(_ message: String) -> some View {
