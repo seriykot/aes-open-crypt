@@ -75,81 +75,58 @@ extension AESCrypt {
         header.append(encryptedSession)
         header.append(headerMAC.finalize())
 
-        let temporary = try TemporaryFile.create(nextTo: outputURL)
-        let tempURL = temporary.url
-        let writer = temporary.handle
+        try AtomicOutput.write(to: outputURL, permissions: .groupReadable) { writer in
+            try writer.write(contentsOf: header)
 
-        var moved = false
-        defer {
-            try? writer.close()
-            if !moved {
-                try? FileManager.default.removeItem(at: tempURL)
-            }
-        }
+            let encryptor = try CBCStream(
+                operation: CCOperation(kCCEncrypt),
+                key: sessionKey,
+                iv: iv0
+            )
+            var payloadMAC = HMACStream(key: sessionKey)
+            var modulo: UInt8 = 0
+            var completed: Int64 = 0
+            let bufferSize = 64 * 1024
+            progress?(AESCryptProgress(completed: 0, total: total))
 
-        try writer.write(contentsOf: header)
-
-        let encryptor = try CBCStream(operation: CCOperation(kCCEncrypt), key: sessionKey, iv: iv0)
-        var payloadMAC = HMACStream(key: sessionKey)
-        var modulo: UInt8 = 0
-        var completed: Int64 = 0
-        let bufferSize = 64 * 1024
-        progress?(AESCryptProgress(completed: 0, total: total))
-
-        while true {
-            if isCancelled() {
-                throw AESCryptError.cancelled
-            }
-            let chunk = try readUpTo(input, bufferSize)
-            let isFinal = chunk.count < bufferSize
-            var plain = chunk
-
-            if isFinal {
-                if version == .v2 {
-                    let padding = (16 - plain.count % 16) % 16
-                    plain.append(contentsOf: repeatElement(UInt8(padding), count: padding))
-                    modulo = UInt8(chunk.count % 16)
-                } else {
-                    let padding = 16 - plain.count % 16
-                    plain.append(contentsOf: repeatElement(UInt8(padding), count: padding))
+            while true {
+                if isCancelled() {
+                    throw AESCryptError.cancelled
                 }
+                let chunk = try readUpTo(input, bufferSize)
+                let isFinal = chunk.count < bufferSize
+                var plain = chunk
+
+                if isFinal {
+                    if version == .v2 {
+                        let padding = (16 - plain.count % 16) % 16
+                        plain.append(contentsOf: repeatElement(UInt8(padding), count: padding))
+                        modulo = UInt8(chunk.count % 16)
+                    } else {
+                        let padding = 16 - plain.count % 16
+                        plain.append(contentsOf: repeatElement(UInt8(padding), count: padding))
+                    }
+                }
+
+                let ciphertext = try encryptor.update(plain)
+                payloadMAC.update(ciphertext)
+                try writer.write(contentsOf: ciphertext)
+                completed += Int64(chunk.count)
+                progress?(AESCryptProgress(completed: completed, total: total))
+
+                if isFinal { break }
             }
 
-            let ciphertext = try encryptor.update(plain)
-            payloadMAC.update(ciphertext)
-            try writer.write(contentsOf: ciphertext)
-            completed += Int64(chunk.count)
-            progress?(AESCryptProgress(completed: completed, total: total))
-
-            if isFinal { break }
-        }
-
-        let tail = try encryptor.finalize()
-        if !tail.isEmpty {
-            payloadMAC.update(tail)
-            try writer.write(contentsOf: tail)
-        }
-        if version == .v2 {
-            try writer.write(contentsOf: Data([modulo]))
-        }
-        try writer.write(contentsOf: payloadMAC.finalize())
-
-        try writer.synchronize()
-        try writer.close()
-
-        do {
-            try FileManager.default.moveItem(at: tempURL, to: outputURL)
-            moved = true
-        } catch {
-            if FileManager.default.fileExists(atPath: outputURL.path) {
-                throw AESCryptError.outputExists(outputURL.path)
+            let tail = try encryptor.finalize()
+            if !tail.isEmpty {
+                payloadMAC.update(tail)
+                try writer.write(contentsOf: tail)
             }
-            throw AESCryptError.io(error.localizedDescription)
+            if version == .v2 {
+                try writer.write(contentsOf: Data([modulo]))
+            }
+            try writer.write(contentsOf: payloadMAC.finalize())
         }
-        try? FileManager.default.setAttributes(
-            [.posixPermissions: 0o644],
-            ofItemAtPath: outputURL.path
-        )
     }
 }
 
