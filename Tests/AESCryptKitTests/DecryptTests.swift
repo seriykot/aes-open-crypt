@@ -110,6 +110,49 @@ final class DecryptTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: output), Data("AES Open Crypt test fixture.\n".utf8))
     }
 
+    func testDecryptOutputPermissionsAre0600() throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let input = directory.appendingPathComponent("hello.aes")
+        try FileManager.default.copyItem(at: try fixture("v2-hello"), to: input)
+        let output = directory.appendingPathComponent("hello.txt")
+
+        try AESCrypt.decrypt(url: input, to: output, password: "apples")
+
+        let attributes = try FileManager.default.attributesOfItem(atPath: output.path)
+        let permissions = try XCTUnwrap(attributes[.posixPermissions] as? NSNumber)
+        XCTAssertEqual(permissions.intValue, 0o600)
+    }
+
+    func testRefusesToOverwriteExistingOutput() throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let input = directory.appendingPathComponent("hello.aes")
+        try FileManager.default.copyItem(at: try fixture("v2-hello"), to: input)
+        let output = directory.appendingPathComponent("hello.txt")
+        let sentinel = Data("keep me\n".utf8)
+        try sentinel.write(to: output)
+
+        XCTAssertThrowsError(try AESCrypt.decrypt(url: input, to: output, password: "apples")) { error in
+            XCTAssertEqual(error as? AESCryptError, .outputExists(output.path))
+        }
+
+        XCTAssertEqual(try Data(contentsOf: output), sentinel)
+        XCTAssertEqual(
+            try FileManager.default.contentsOfDirectory(atPath: directory.path).sorted(),
+            ["hello.aes", "hello.txt"]
+        )
+    }
+
+    private func makeTemporaryDirectory() throws -> URL {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("aesopen-decrypt-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        return directory
+    }
+
     private func decrypt(_ name: String, password: String) throws -> URL {
         let input = try fixture(name)
         let output = temporaryOutput()

@@ -15,10 +15,8 @@ extension AESCrypt {
     ) throws {
         try FileSafety.ensureDistinct(input: url, output: outputURL)
 
-        let version = format.streamVersion
-        if version == .v3, !(1...5_000_000).contains(iterations) {
-            throw AESCryptError.corrupt("KDF iteration count is out of range")
-        }
+        // Reject an unusable iteration count before touching the file system.
+        try validateIterations(iterations, for: format.streamVersion)
 
         let input: FileHandle
         do {
@@ -27,6 +25,34 @@ extension AESCrypt {
             throw AESCryptError.io(error.localizedDescription)
         }
         defer { try? input.close() }
+
+        try encrypt(
+            reader: input,
+            to: outputURL,
+            password: password,
+            format: format,
+            iterations: iterations,
+            hint: hint,
+            progress: progress,
+            isCancelled: isCancelled
+        )
+    }
+
+    /// The encrypt path with its input abstracted, so tests can drive read
+    /// failures that a real file cannot produce on demand. `url`-based callers
+    /// reach it through the public wrapper above.
+    static func encrypt(
+        reader input: ChunkReader,
+        to outputURL: URL,
+        password: String,
+        format: AESOutputFormat = .v2,
+        iterations: UInt32 = 600_000,
+        hint: String? = nil,
+        progress: AESCryptProgressHandler? = nil,
+        isCancelled: () -> Bool = { false }
+    ) throws {
+        let version = format.streamVersion
+        try validateIterations(iterations, for: version)
 
         let total = Int64(try input.seekToEnd())
         try input.seek(toOffset: 0)
@@ -56,7 +82,7 @@ extension AESCrypt {
         var header = Data([0x41, 0x45, 0x53, version.rawValue, 0x00])
         let createdBy = Data("aes-open-crypt \(AESOpenVersion.current)".utf8)
         header.append(try extensionBlock(identifier: "CREATED_BY", value: createdBy))
-        if let hint = normalizedHint(hint) {
+        if let hint = AESPasswordHint.normalize(hint) {
             header.append(
                 try extensionBlock(
                     identifier: AESPasswordHint.extensionIdentifier,
@@ -75,88 +101,65 @@ extension AESCrypt {
         header.append(encryptedSession)
         header.append(headerMAC.finalize())
 
-        let temporary = try TemporaryFile.create(nextTo: outputURL)
-        let tempURL = temporary.url
-        let writer = temporary.handle
+        try AtomicOutput.write(to: outputURL, permissions: .groupReadable) { writer in
+            try writer.write(contentsOf: header)
 
-        var moved = false
-        defer {
-            try? writer.close()
-            if !moved {
-                try? FileManager.default.removeItem(at: tempURL)
-            }
-        }
+            let encryptor = try CBCStream(
+                operation: CCOperation(kCCEncrypt),
+                key: sessionKey,
+                iv: iv0
+            )
+            var payloadMAC = HMACStream(key: sessionKey)
+            var modulo: UInt8 = 0
+            var completed: Int64 = 0
+            let bufferSize = 64 * 1024
+            progress?(AESCryptProgress(completed: 0, total: total))
 
-        try writer.write(contentsOf: header)
-
-        let encryptor = try CBCStream(operation: CCOperation(kCCEncrypt), key: sessionKey, iv: iv0)
-        var payloadMAC = HMACStream(key: sessionKey)
-        var modulo: UInt8 = 0
-        var completed: Int64 = 0
-        let bufferSize = 64 * 1024
-        progress?(AESCryptProgress(completed: 0, total: total))
-
-        while true {
-            if isCancelled() {
-                throw AESCryptError.cancelled
-            }
-            let chunk = try readUpTo(input, bufferSize)
-            let isFinal = chunk.count < bufferSize
-            var plain = chunk
-
-            if isFinal {
-                if version == .v2 {
-                    let padding = (16 - plain.count % 16) % 16
-                    plain.append(contentsOf: repeatElement(UInt8(padding), count: padding))
-                    modulo = UInt8(chunk.count % 16)
-                } else {
-                    let padding = 16 - plain.count % 16
-                    plain.append(contentsOf: repeatElement(UInt8(padding), count: padding))
+            while true {
+                if isCancelled() {
+                    throw AESCryptError.cancelled
                 }
+                let chunk = try readUpTo(input, bufferSize)
+                let isFinal = chunk.count < bufferSize
+                var plain = chunk
+
+                if isFinal {
+                    if version == .v2 {
+                        let padding = (16 - plain.count % 16) % 16
+                        plain.append(contentsOf: repeatElement(UInt8(padding), count: padding))
+                        modulo = UInt8(chunk.count % 16)
+                    } else {
+                        let padding = 16 - plain.count % 16
+                        plain.append(contentsOf: repeatElement(UInt8(padding), count: padding))
+                    }
+                }
+
+                let ciphertext = try encryptor.update(plain)
+                payloadMAC.update(ciphertext)
+                try writer.write(contentsOf: ciphertext)
+                completed += Int64(chunk.count)
+                progress?(AESCryptProgress(completed: completed, total: total))
+
+                if isFinal { break }
             }
 
-            let ciphertext = try encryptor.update(plain)
-            payloadMAC.update(ciphertext)
-            try writer.write(contentsOf: ciphertext)
-            completed += Int64(chunk.count)
-            progress?(AESCryptProgress(completed: completed, total: total))
-
-            if isFinal { break }
-        }
-
-        let tail = try encryptor.finalize()
-        if !tail.isEmpty {
-            payloadMAC.update(tail)
-            try writer.write(contentsOf: tail)
-        }
-        if version == .v2 {
-            try writer.write(contentsOf: Data([modulo]))
-        }
-        try writer.write(contentsOf: payloadMAC.finalize())
-
-        try writer.synchronize()
-        try writer.close()
-
-        do {
-            try FileManager.default.moveItem(at: tempURL, to: outputURL)
-            moved = true
-        } catch {
-            if FileManager.default.fileExists(atPath: outputURL.path) {
-                throw AESCryptError.outputExists(outputURL.path)
+            let tail = try encryptor.finalize()
+            if !tail.isEmpty {
+                payloadMAC.update(tail)
+                try writer.write(contentsOf: tail)
             }
-            throw AESCryptError.io(error.localizedDescription)
+            if version == .v2 {
+                try writer.write(contentsOf: Data([modulo]))
+            }
+            try writer.write(contentsOf: payloadMAC.finalize())
         }
-        try? FileManager.default.setAttributes(
-            [.posixPermissions: 0o644],
-            ofItemAtPath: outputURL.path
-        )
     }
 }
 
-private func normalizedHint(_ hint: String?) -> String? {
-    guard let hint else { return nil }
-    let trimmed = hint.trimmingCharacters(in: .whitespacesAndNewlines)
-    return trimmed.isEmpty ? nil : trimmed
+private func validateIterations(_ iterations: UInt32, for version: AESFormatVersion) throws {
+    if version == .v3, !(1...5_000_000).contains(iterations) {
+        throw AESCryptError.corrupt("KDF iteration count is out of range")
+    }
 }
 
 private func extensionBlock(identifier: String, value: Data) throws -> Data {
@@ -182,11 +185,18 @@ private func randomData(_ count: Int) throws -> Data {
     return data
 }
 
-private func readUpTo(_ handle: FileHandle, _ count: Int) throws -> Data {
+private func readUpTo(_ reader: ChunkReader, _ count: Int) throws -> Data {
     var result = Data()
     while result.count < count {
-        guard let chunk = try? handle.read(upToCount: count - result.count),
-              !chunk.isEmpty else {
+        let chunk: Data?
+        do {
+            chunk = try reader.read(upToCount: count - result.count)
+        } catch {
+            // A failed read is not end of file. Reporting it here keeps a
+            // short read from being encrypted as if it were the whole tail.
+            throw AESCryptError.io(error.localizedDescription)
+        }
+        guard let chunk, !chunk.isEmpty else {
             break
         }
         result.append(chunk)

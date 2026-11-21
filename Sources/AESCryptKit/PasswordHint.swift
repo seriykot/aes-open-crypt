@@ -15,6 +15,17 @@ public enum AESPasswordHint {
     public static let maximumLength = 256
     public static let maximumDisplayScalars = 256
 
+    /// Trim surrounding whitespace and treat blank text as no hint.
+    ///
+    /// This deliberately does not enforce ``maximumLength``: the product limit
+    /// belongs to the UI and CLI, while the core keeps whatever the extension
+    /// format can store.
+    public static func normalize(_ text: String?) -> String? {
+        guard let text else { return nil }
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
     /// Bound text shown in the UI without changing the stored hint.
     public static func displayText(_ hint: String, maximumScalars: Int = maximumDisplayScalars) -> String {
         guard maximumScalars > 0 else { return "" }

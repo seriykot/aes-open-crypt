@@ -2,6 +2,21 @@ import XCTest
 @testable import AESCryptKit
 
 final class PasswordHintTests: XCTestCase {
+    func testNormalizeTrimsAndTreatsBlankAsNil() {
+        XCTAssertNil(AESPasswordHint.normalize(nil))
+        XCTAssertNil(AESPasswordHint.normalize(""))
+        XCTAssertNil(AESPasswordHint.normalize(" \n\t "))
+        XCTAssertEqual(AESPasswordHint.normalize("  garden  "), "garden")
+        XCTAssertEqual(AESPasswordHint.normalize("\nclé 🔐 \t"), "clé 🔐")
+    }
+
+    func testNormalizeKeepsOverLimitText() {
+        let overLimit = String(repeating: "a", count: AESPasswordHint.maximumLength + 1)
+
+        XCTAssertEqual(AESPasswordHint.normalize(overLimit), overLimit)
+        XCTAssertEqual(AESPasswordHint.normalize("  \(overLimit)  "), overLimit)
+    }
+
     func testV2HintIsWrittenAndRead() throws {
         let files = try encryptedFile(Data("payload".utf8), format: .v2, hint: "pet name")
         defer { cleanUp(files.input, files.output) }

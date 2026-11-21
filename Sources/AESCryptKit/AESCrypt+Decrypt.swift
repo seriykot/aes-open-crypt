@@ -96,93 +96,70 @@ extension AESCrypt {
             storedPayloadMAC = trailer
         }
 
-        let temporary = try TemporaryFile.create(nextTo: outputURL)
-        let tempURL = temporary.url
-        let writer = temporary.handle
+        try AtomicOutput.write(to: outputURL, permissions: .ownerOnly) { writer in
+            try input.seek(toOffset: UInt64(info.ciphertextOffset))
+            var payloadMAC = HMACStream(key: dataKey)
+            let decryptor = try CBCStream(
+                operation: CCOperation(kCCDecrypt),
+                key: dataKey,
+                iv: dataIV
+            )
 
-        var moved = false
-        defer {
-            try? writer.close()
-            if !moved {
-                try? FileManager.default.removeItem(at: tempURL)
+            var held = Data()
+            func consume(_ plaintext: Data) throws {
+                guard !plaintext.isEmpty else { return }
+                held.append(plaintext)
+                guard held.count > 16 else { return }
+                try writer.write(contentsOf: held.dropLast(16))
+                held = Data(held.suffix(16))
             }
-        }
 
-        try input.seek(toOffset: UInt64(info.ciphertextOffset))
-        var payloadMAC = HMACStream(key: dataKey)
-        let decryptor = try CBCStream(operation: CCOperation(kCCDecrypt), key: dataKey, iv: dataIV)
+            let total = info.ciphertextLength
+            var completed: Int64 = 0
+            progress?(AESCryptProgress(completed: 0, total: total))
 
-        var held = Data()
-        func consume(_ plaintext: Data) throws {
-            guard !plaintext.isEmpty else { return }
-            held.append(plaintext)
-            guard held.count > 16 else { return }
-            try writer.write(contentsOf: held.dropLast(16))
-            held = Data(held.suffix(16))
-        }
-
-        let total = info.ciphertextLength
-        var completed: Int64 = 0
-        progress?(AESCryptProgress(completed: 0, total: total))
-
-        while completed < total {
-            if isCancelled() {
-                throw AESCryptError.cancelled
-            }
-            let count = Int(min(Int64(64 * 1024), total - completed))
-            let chunk = try readExactly(input, count)
-            payloadMAC.update(chunk)
-            try consume(decryptor.update(chunk))
-            completed += Int64(count)
-            progress?(AESCryptProgress(completed: completed, total: total))
-        }
-
-        try consume(decryptor.finalize())
-
-        guard constantTimeEquals(payloadMAC.finalize(), storedPayloadMAC) else {
-            throw AESCryptError.authenticationFailed
-        }
-
-        if held.isEmpty {
-            guard info.version != .v3 else {
-                throw AESCryptError.corrupt("missing padding block")
-            }
-        } else {
-            let keep: Int
-            if info.version == .v3 {
-                guard let padding = held.last, (1...16).contains(padding) else {
-                    throw AESCryptError.corrupt("invalid padding")
+            while completed < total {
+                if isCancelled() {
+                    throw AESCryptError.cancelled
                 }
-                let paddingLength = Int(padding)
-                guard held.count >= paddingLength,
-                      held.suffix(paddingLength).allSatisfy({ $0 == padding }) else {
-                    throw AESCryptError.corrupt("invalid padding")
+                let count = Int(min(Int64(64 * 1024), total - completed))
+                let chunk = try readExactly(input, count)
+                payloadMAC.update(chunk)
+                try consume(decryptor.update(chunk))
+                completed += Int64(count)
+                progress?(AESCryptProgress(completed: completed, total: total))
+            }
+
+            try consume(decryptor.finalize())
+
+            guard constantTimeEquals(payloadMAC.finalize(), storedPayloadMAC) else {
+                throw AESCryptError.authenticationFailed
+            }
+
+            if held.isEmpty {
+                guard info.version != .v3 else {
+                    throw AESCryptError.corrupt("missing padding block")
                 }
-                keep = held.count - paddingLength
             } else {
-                guard held.count == 16 else {
-                    throw AESCryptError.corrupt("missing final block")
+                let keep: Int
+                if info.version == .v3 {
+                    guard let padding = held.last, (1...16).contains(padding) else {
+                        throw AESCryptError.corrupt("invalid padding")
+                    }
+                    let paddingLength = Int(padding)
+                    guard held.count >= paddingLength,
+                          held.suffix(paddingLength).allSatisfy({ $0 == padding }) else {
+                        throw AESCryptError.corrupt("invalid padding")
+                    }
+                    keep = held.count - paddingLength
+                } else {
+                    guard held.count == 16 else {
+                        throw AESCryptError.corrupt("missing final block")
+                    }
+                    keep = modulo == 0 ? 16 : Int(modulo)
                 }
-                keep = modulo == 0 ? 16 : Int(modulo)
+                try writer.write(contentsOf: held.prefix(keep))
             }
-            try writer.write(contentsOf: held.prefix(keep))
         }
-
-        try writer.synchronize()
-        try writer.close()
-
-        do {
-            try FileManager.default.moveItem(at: tempURL, to: outputURL)
-            moved = true
-        } catch {
-            if FileManager.default.fileExists(atPath: outputURL.path) {
-                throw AESCryptError.outputExists(outputURL.path)
-            }
-            throw AESCryptError.io(error.localizedDescription)
-        }
-        try? FileManager.default.setAttributes(
-            [.posixPermissions: 0o600],
-            ofItemAtPath: outputURL.path
-        )
     }
 }
