@@ -37,7 +37,6 @@ public final class BatchModel: ObservableObject {
     @Published public private(set) var errorMessage: String?
     @Published public private(set) var passwordError: String?
     @Published public private(set) var notice: String?
-    @Published public private(set) var hasMixedInputs = false
 
     @Published public var password = ""
     @Published public var confirmation = ""
@@ -194,7 +193,6 @@ public final class BatchModel: ObservableObject {
             rows = plan.items.map {
                 Row(id: UUID(), item: $0, status: .pending, fraction: 0)
             }
-            hasMixedInputs = false
             phase = .ready
             overallProgress = 0
             errorMessage = nil
@@ -211,7 +209,6 @@ public final class BatchModel: ObservableObject {
         if rows.isEmpty {
             clear()
         } else {
-            refreshMixedFlag()
             phase = .ready
             overallProgress = 0
         }
@@ -232,7 +229,6 @@ public final class BatchModel: ObservableObject {
         password = ""
         confirmation = ""
         hint = ""
-        hasMixedInputs = false
     }
 
     public func start() {
@@ -443,17 +439,6 @@ public final class BatchModel: ObservableObject {
         overallProgress = 0
         errorMessage = nil
         passwordError = nil
-    }
-
-    private func refreshMixedFlag() {
-        guard let plan = try? AESCryptBatch.plan(
-            urls: rows.map(\.item.input),
-            outputPolicy: .unique
-        ) else {
-            return
-        }
-        let modes = Set(plan.items.map(\.mode))
-        hasMixedInputs = modes.contains(.encrypt) && modes.contains(.decrypt)
     }
 
     private static func unreadableDropMessage(_ count: Int) -> String? {
