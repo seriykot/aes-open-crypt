@@ -314,10 +314,12 @@ Run on a real desktop in both light and dark mode (System Settings → Appearanc
    `swift test --filter ThemePaletteTests` to check the contrast floors.
 
 5. **Batch states.** Check each state in both modes: empty; one file; ten
-   files; mixed batch (mode picker); working with percent; cancel; finished
-   with the summary (the summary row with **Show in Finder** and **Done**
-   sits between the file card and the password fields); weak password (an
-   amber suggestion under the password field, and **Encrypt** stays enabled);
+   files; mixed drop (the notice
+   **Drop plain files or encrypted files separately**; no rows added);
+   working with percent; cancel; finished with the summary (the summary row
+   with **Show in Finder** and **Done** sits between the file card and the
+   password fields); weak password (an amber suggestion under the password
+   field, and **Encrypt** stays enabled);
    wrong password (error and a **Retry** button under the password field, no
    summary row; press Return after typing the password to retry); corrupt
    file (amber issue text); invalid `.aes`; eleven files (**Maximum of 10

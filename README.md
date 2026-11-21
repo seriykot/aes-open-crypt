@@ -31,8 +31,10 @@ or block launch.
 
 ## ✨ Features
 
-- Drag or choose up to 10 files; `.aes` files are decrypted and other files
-  encrypted.
+- Drag or choose up to 10 files. One password applies to one direction:
+  `.aes` files are decrypted and other files are encrypted. Mixed drops must
+  be separate: a drop with both is refused with
+  **Drop plain files or encrypted files separately** and adds no rows.
 - Finder Services and the `aesopen` command-line tool are included.
 - Outputs never overwrite existing files; wrong passwords and corrupt files
   leave no partial output.
