@@ -280,23 +280,19 @@ public final class BatchModel: ObservableObject {
         hint = ""
     }
 
+    /// The plan the rows already hold. Start runs exactly these items, so the
+    /// output shown in a row is the output that gets written. Planning happens
+    /// on add, and again only on an explicit refresh: a mode switch or a retry.
+    public var currentPlan: AESCryptBatchPlan {
+        AESCryptBatchPlan(items: rows.map(\.item))
+    }
+
     public func start() {
         guard canStart else { return }
 
-        let plan: AESCryptBatchPlan
-        do {
-            plan = try AESCryptBatch.plan(
-                urls: rows.map(\.item.input),
-                mode: mode,
-                outputPolicy: .unique
-            )
-        } catch {
-            errorMessage = Self.message(for: error)
-            return
-        }
+        let plan = currentPlan
         guard !plan.items.isEmpty else { return }
 
-        rows = plan.items.map { Row(id: UUID(), item: $0, status: .pending, fraction: 0) }
         beginRun(plan: plan)
     }
 
