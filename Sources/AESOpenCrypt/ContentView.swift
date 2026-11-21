@@ -290,8 +290,14 @@ struct ContentView: View {
                     .fixedSize()
 
                     Picker("Format", selection: $model.format) {
-                        Text("Compatible (v2)").tag(AESFormatVersion.v2)
-                        Text("Strong (v3)").tag(AESFormatVersion.v3)
+                        ForEach(AESOutputFormat.allCases, id: \.self) { format in
+                            switch format {
+                            case .v2:
+                                Text("Compatible (v2)").tag(format)
+                            case .v3:
+                                Text("Strong (v3)").tag(format)
+                            }
+                        }
                     }
                     .pickerStyle(.segmented)
                     .labelsHidden()
@@ -601,7 +607,7 @@ struct ContentView: View {
         HStack {
             Text("Offline. No telemetry. MIT licensed.")
             Spacer()
-            Text("v0.2.0")
+            Text("v\(AESOpenVersion.current)")
         }
         .font(.caption2)
         .foregroundStyle(Theme.textTertiary)

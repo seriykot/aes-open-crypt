@@ -50,7 +50,7 @@ public final class BatchModel: ObservableObject {
         }
     }
 
-    @Published public var format: AESFormatVersion = .v3 {
+    @Published public var format: AESOutputFormat = .v3 {
         didSet {
             UserDefaults.standard.set(Int(format.rawValue), forKey: "outputFormat")
         }
@@ -63,7 +63,7 @@ public final class BatchModel: ObservableObject {
 
     public init() {
         let saved = UserDefaults.standard.object(forKey: "outputFormat") as? Int
-        if let saved, saved == AESFormatVersion.v2.rawValue {
+        if let saved, saved == AESOutputFormat.v2.rawValue {
             format = .v2
         } else {
             format = .v3

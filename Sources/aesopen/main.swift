@@ -2,7 +2,7 @@ import AESCryptKit
 import Darwin
 import Foundation
 
-private let toolVersion = "0.2.0"
+private let toolVersion = AESOpenVersion.current
 
 private let usageText = """
 aesopen - AES Crypt compatible encryption
@@ -61,7 +61,7 @@ Exit codes:
 
 JSON schema:
   {
-    "version": "0.2.0",
+    "version": "\(AESOpenVersion.current)",
     "command": "encrypt",
     "results": [
       {"input": "/abs/a.txt", "output": "/abs/a.txt.aes", "mode": "encrypt",
@@ -89,7 +89,7 @@ private struct Options {
     var output: String?
     var password: String?
     var passwordFile: String?
-    var format: AESFormatVersion = .v3
+    var format: AESOutputFormat = .v3
     var hint: String?
     var iterations: UInt32 = 600_000
     var json = false
@@ -201,15 +201,11 @@ private func parse(_ arguments: [String], into options: inout Options) throws {
         case "--password-file":
             options.passwordFile = try value(after: &index, in: arguments, name: argument)
         case "--format":
-            let raw = try value(after: &index, in: arguments, name: argument).lowercased()
-            switch raw {
-            case "v2", "2":
-                options.format = .v2
-            case "v3", "3":
-                options.format = .v3
-            default:
-                throw CLIError.usage("unknown format '\(raw)'")
+            let raw = try value(after: &index, in: arguments, name: argument)
+            guard let format = AESOutputFormat(cliText: raw) else {
+                throw CLIError.usage("unknown format '\(raw.lowercased())'")
             }
+            options.format = format
         case "--hint":
             options.hint = try value(after: &index, in: arguments, name: argument)
         case "--iterations":
