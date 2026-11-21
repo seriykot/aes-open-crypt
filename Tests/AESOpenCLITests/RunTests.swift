@@ -289,6 +289,133 @@ final class RunTests: XCTestCase {
         XCTAssertEqual(environment.passwordPrompts, [])
     }
 
+    // MARK: - Explicit output preflight
+
+    func testOutputFlagPreflightsAnExistingOutputBeforeAskingForAPassword() throws {
+        let plain = try write("payload\n", name: "pre.txt")
+        let existing = directory.appendingPathComponent("existing.aes")
+        try Data("sentinel bytes\n".utf8).write(to: existing)
+        let environment = FakeEnvironment()
+
+        let code = CLIRunner.run(
+            arguments: ["encrypt", "-o", existing.path, plain.path],
+            environment: environment
+        )
+
+        XCTAssertEqual(code, 5)
+        XCTAssertEqual(environment.passwordPrompts, [])
+        XCTAssertEqual(try Data(contentsOf: existing), Data("sentinel bytes\n".utf8))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: plain.path + ".aes"))
+    }
+
+    func testOutputFlagRejectsAnAlreadyEncryptedInputBeforeAskingForAPassword() throws {
+        let encrypted = try makeEncryptedFile(named: "double.aes")
+        let output = directory.appendingPathComponent("double.out.aes")
+        let environment = FakeEnvironment()
+
+        let code = CLIRunner.run(
+            arguments: ["encrypt", "-o", output.path, encrypted.path],
+            environment: environment
+        )
+
+        XCTAssertEqual(code, 3)
+        XCTAssertEqual(environment.passwordPrompts, [])
+        XCTAssertTrue(environment.stderr.contains(AESCryptBatchIssue.alreadyEncrypted.userMessage))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: output.path))
+    }
+
+    func testOutputFlagRejectsAPlainInputForDecryptBeforeAskingForAPassword() throws {
+        let plain = try write("payload\n", name: "plain-for-decrypt.txt")
+        let output = directory.appendingPathComponent("plain.out")
+        let environment = FakeEnvironment()
+
+        let code = CLIRunner.run(
+            arguments: ["decrypt", "-o", output.path, plain.path],
+            environment: environment
+        )
+
+        XCTAssertEqual(code, 3)
+        XCTAssertEqual(environment.passwordPrompts, [])
+        XCTAssertTrue(environment.stderr.contains(AESCryptBatchIssue.notEncrypted.userMessage))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: output.path))
+    }
+
+    func testOutputFlagRejectsAFolderBeforeAskingForAPassword() throws {
+        let folder = directory.appendingPathComponent("folder")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let output = directory.appendingPathComponent("folder.aes")
+        let environment = FakeEnvironment()
+
+        let code = CLIRunner.run(
+            arguments: ["encrypt", "-o", output.path, folder.path],
+            environment: environment
+        )
+
+        XCTAssertEqual(code, 5)
+        XCTAssertEqual(environment.passwordPrompts, [])
+        XCTAssertTrue(environment.stderr.contains(AESCryptBatchIssue.notAFile.userMessage))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: output.path))
+    }
+
+    func testOutputFlagRejectsTheInputItselfBeforeAskingForAPassword() throws {
+        let encrypted = try makeEncryptedFile(named: "same.aes")
+        let before = try Data(contentsOf: encrypted)
+        let environment = FakeEnvironment()
+
+        let code = CLIRunner.run(
+            arguments: ["decrypt", "-o", encrypted.path, encrypted.path],
+            environment: environment
+        )
+
+        XCTAssertEqual(code, 5)
+        XCTAssertEqual(environment.passwordPrompts, [])
+        XCTAssertTrue(environment.stderr.contains(AESCryptBatchIssue.sameFile.userMessage))
+        XCTAssertEqual(try Data(contentsOf: encrypted), before)
+    }
+
+    // MARK: - Empty passwords
+
+    func testEmptyFlagPasswordIsAUsageError() throws {
+        let plain = try write("payload\n", name: "empty-flag.txt")
+        let environment = FakeEnvironment()
+
+        let code = CLIRunner.run(
+            arguments: ["encrypt", "--password", "", plain.path],
+            environment: environment
+        )
+
+        XCTAssertEqual(code, 1)
+        XCTAssertTrue(environment.stderr.contains("must not be empty"), environment.stderr)
+        XCTAssertEqual(environment.passwordPrompts, [])
+        XCTAssertFalse(FileManager.default.fileExists(atPath: plain.path + ".aes"))
+    }
+
+    func testEmptyInteractivePasswordIsAUsageError() throws {
+        let plain = try write("payload\n", name: "empty-prompt.txt")
+        let environment = FakeEnvironment()
+        environment.passwords = ["", ""]
+
+        let code = CLIRunner.run(arguments: ["encrypt", plain.path], environment: environment)
+
+        XCTAssertEqual(code, 1)
+        XCTAssertTrue(environment.stderr.contains("must not be empty"), environment.stderr)
+        XCTAssertEqual(environment.passwordPrompts, ["Password: "])
+        XCTAssertFalse(FileManager.default.fileExists(atPath: plain.path + ".aes"))
+    }
+
+    func testEmptyInteractivePasswordIsRejectedForDecrypt() throws {
+        let encrypted = try makeEncryptedFile(named: "empty-decrypt.aes")
+        let environment = FakeEnvironment()
+        environment.passwords = [""]
+
+        let code = CLIRunner.run(arguments: ["decrypt", encrypted.path], environment: environment)
+
+        XCTAssertEqual(code, 1)
+        XCTAssertTrue(environment.stderr.contains("must not be empty"), environment.stderr)
+        XCTAssertEqual(environment.passwordPrompts, ["Password: "])
+        XCTAssertFalse(FileManager.default.fileExists(atPath: directory.appendingPathComponent("empty-decrypt").path))
+    }
+
     // MARK: - Cancellation
 
     func testInterruptAfterTheFirstProgressWriteCancelsTheRun() throws {
@@ -338,5 +465,14 @@ final class RunTests: XCTestCase {
         let url = directory.appendingPathComponent(name)
         try data.write(to: url)
         return url
+    }
+
+    /// Make a real encrypted file at `<name>` in the test directory.
+    private func makeEncryptedFile(named name: String) throws -> URL {
+        let plain = try write("encrypted payload\n", name: name + ".plain")
+        let encrypted = directory.appendingPathComponent(name)
+        try AESCrypt.encrypt(url: plain, to: encrypted, password: "apples", format: .v2)
+        try FileManager.default.removeItem(at: plain)
+        return encrypted
     }
 }

@@ -49,40 +49,40 @@ public enum CLIRunner {
     }
 
     /// Encrypt or decrypt the inputs and report the results.
+    ///
+    /// Every run starts with a plan, including a single `-o` run: the plan is
+    /// what knows whether the file is a folder, already encrypted, not
+    /// encrypted, the same file, or sitting on an existing output. That means
+    /// those answers come back before the password prompt instead of after it.
     static func transform(
         urls: [URL],
         mode: AESCryptBatchMode,
         options: Options,
         environment: CLIEnvironment
     ) throws -> Int32 {
-        if urls.count == 1, let outputPath = options.output {
-            let password = try resolvePassword(
-                options,
-                confirm: mode == .encrypt,
-                environment: environment
-            )
-            environment.installInterruptHandler()
-            let result = runDirect(
-                input: urls[0],
-                output: URL(fileURLWithPath: outputPath),
-                mode: mode,
-                password: password,
-                options: options,
-                environment: environment
-            )
-            try Report.emit([result], command: mode.rawValue, options: options, environment: environment)
-            return Report.aggregateExitCode([result])
+        if options.password?.isEmpty == true {
+            throw CLIError.usage("--password must not be empty")
         }
 
         let plan: AESCryptBatchPlan
-        do {
-            plan = try AESCryptBatch.plan(urls: urls, mode: mode, outputPolicy: .strict)
-        } catch AESCryptBatchIssue.tooManyFiles(let maximum) {
-            throw CLIError.batchLimit("too many input files: \(urls.count) given, \(maximum) maximum")
+        if urls.count == 1, let outputPath = options.output {
+            plan = AESCryptBatch.planSingle(
+                input: urls[0],
+                output: URL(fileURLWithPath: outputPath),
+                mode: mode
+            )
+        } else {
+            do {
+                plan = try AESCryptBatch.plan(urls: urls, mode: mode, outputPolicy: .strict)
+            } catch AESCryptBatchIssue.tooManyFiles(let maximum) {
+                throw CLIError.batchLimit("too many input files: \(urls.count) given, \(maximum) maximum")
+            }
         }
 
         let password: String
         if plan.runnableItems.isEmpty {
+            // Nothing will be attempted, so there is nothing to unlock. Asking
+            // here would prompt for a password that no file can use.
             password = ""
         } else {
             password = try resolvePassword(
@@ -107,64 +107,26 @@ public enum CLIRunner {
         return Report.aggregateExitCode(results)
     }
 
-    /// Run one file onto an exact output path without going through a plan.
-    ///
-    /// This is the pre-plan path kept for now: it prompts before it checks
-    /// anything, which the plan path is about to replace.
-    private static func runDirect(
-        input: URL,
-        output: URL,
-        mode: AESCryptBatchMode,
-        password: String,
-        options: Options,
-        environment: CLIEnvironment
-    ) -> AESCryptBatchResult {
-        let item = AESCryptBatchItem(input: input, output: output, mode: mode)
-        do {
-            switch mode {
-            case .encrypt:
-                try AESCrypt.encrypt(
-                    url: input,
-                    to: output,
-                    password: password,
-                    format: options.format,
-                    iterations: options.iterations,
-                    hint: options.hint,
-                    progress: Report.directProgressHandler(options, environment: environment),
-                    isCancelled: { environment.isInterrupted }
-                )
-            case .decrypt:
-                try AESCrypt.decrypt(
-                    url: input,
-                    to: output,
-                    password: password,
-                    progress: Report.directProgressHandler(options, environment: environment),
-                    isCancelled: { environment.isInterrupted }
-                )
-            }
-            Report.clearProgress(options, environment: environment)
-            return AESCryptBatchResult(item: item, failure: nil)
-        } catch let error as AESCryptError {
-            Report.clearProgress(options, environment: environment)
-            return AESCryptBatchResult(item: item, failure: .crypto(error))
-        } catch {
-            Report.clearProgress(options, environment: environment)
-            return AESCryptBatchResult(item: item, failure: .crypto(.io(error.localizedDescription)))
-        }
-    }
-
     // MARK: - Passwords
 
     /// Find the password for this run: the flag, the file, or a prompt.
     ///
     /// `confirm` asks twice, which is what an encrypt prompt does. A single
     /// decrypt prompt leaves room for a password file piped on stdin.
+    ///
+    /// An empty password is refused in all three forms. The AES Crypt stream
+    /// can represent it, but a mistyped or empty variable producing a
+    /// password-less file is never what someone meant, and `--password ""` in
+    /// a script is far more likely a bug than intent.
     static func resolvePassword(
         _ options: Options,
         confirm: Bool,
         environment: CLIEnvironment
     ) throws -> String {
         if let supplied = options.password {
+            guard !supplied.isEmpty else {
+                throw CLIError.usage("--password must not be empty")
+            }
             return supplied
         }
         if let path = options.passwordFile {
@@ -172,6 +134,9 @@ public enum CLIRunner {
         }
         guard let first = environment.readPassword(prompt: "Password: ") else {
             throw CLIError.usage("could not read a password")
+        }
+        guard !first.isEmpty else {
+            throw CLIError.usage("password must not be empty")
         }
         if confirm {
             guard let second = environment.readPassword(prompt: "Repeat password: "), first == second else {

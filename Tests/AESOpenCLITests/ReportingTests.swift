@@ -105,16 +105,12 @@ final class ReportingTests: XCTestCase {
     // MARK: - JSON
 
     func testEncryptJSONRow() throws {
-        let item = AESCryptBatchItem(
-            input: URL(fileURLWithPath: "/tmp/in.txt"),
-            output: URL(fileURLWithPath: "/tmp/in.txt.aes"),
-            mode: .encrypt
-        )
+        let item = try plannedItem(mode: .encrypt)
 
         let row = Report.jsonResult(AESCryptBatchResult(item: item, failure: nil))
 
-        XCTAssertEqual(row["input"] as? String, "/tmp/in.txt")
-        XCTAssertEqual(row["output"] as? String, "/tmp/in.txt.aes")
+        XCTAssertEqual(row["input"] as? String, item.input.path)
+        XCTAssertEqual(row["output"] as? String, item.output.path)
         XCTAssertEqual(row["mode"] as? String, "encrypt")
         XCTAssertEqual(row["status"] as? String, "ok")
         XCTAssertTrue(row["error"] is NSNull)
@@ -122,14 +118,12 @@ final class ReportingTests: XCTestCase {
     }
 
     func testDecryptJSONRowError() throws {
-        let item = AESCryptBatchItem(
-            input: URL(fileURLWithPath: "/tmp/in.aes"),
-            output: URL(fileURLWithPath: "/tmp/in"),
-            mode: .decrypt
-        )
+        let item = try plannedItem(mode: .decrypt)
 
         let row = Report.jsonResult(AESCryptBatchResult(item: item, failure: .crypto(.wrongPassword)))
 
+        XCTAssertEqual(row["input"] as? String, item.input.path)
+        XCTAssertEqual(row["mode"] as? String, "decrypt")
         XCTAssertEqual(row["status"] as? String, "error")
         XCTAssertTrue(row["output"] is NSNull)
         let error = try XCTUnwrap(row["error"] as? [String: Any])
@@ -139,20 +133,15 @@ final class ReportingTests: XCTestCase {
     }
 
     func testIssueJSONRow() throws {
-        let item = AESCryptBatchItem(
-            input: URL(fileURLWithPath: "/tmp/folder"),
-            output: URL(fileURLWithPath: "/tmp/folder.aes"),
-            mode: .encrypt
-        )
+        let item = try plannedItem(mode: .encrypt)
+        let issue = AESCryptBatchIssue.outputExists(item.output.path)
 
-        let row = Report.jsonResult(
-            AESCryptBatchResult(item: item, failure: .issue(.outputExists("/tmp/folder.aes")))
-        )
+        let row = Report.jsonResult(AESCryptBatchResult(item: item, failure: .issue(issue)))
 
         let error = try XCTUnwrap(row["error"] as? [String: Any])
         XCTAssertEqual(error["code"] as? Int, 5)
         XCTAssertEqual(error["kind"] as? String, "outputExists")
-        XCTAssertEqual(error["message"] as? String, AESCryptBatchIssue.outputExists("/tmp/folder.aes").userMessage)
+        XCTAssertEqual(error["message"] as? String, issue.userMessage)
     }
 
     func testInfoJSON() throws {
@@ -242,11 +231,9 @@ final class ReportingTests: XCTestCase {
 
     func testSuccessTextEscapesTerminalControlsInThePath() throws {
         let environment = FakeEnvironment()
-        let item = AESCryptBatchItem(
-            input: URL(fileURLWithPath: "/tmp/in.txt"),
-            output: URL(fileURLWithPath: "/tmp/control\u{1B}name.aes"),
-            mode: .encrypt
-        )
+        let output = FileManager.default.temporaryDirectory
+            .appendingPathComponent("control\u{1B}name-\(UUID().uuidString).aes")
+        let item = try plannedItem(mode: .encrypt, outputPath: output)
 
         try Report.emit(
             [AESCryptBatchResult(item: item, failure: nil)],
@@ -255,7 +242,8 @@ final class ReportingTests: XCTestCase {
             environment: environment
         )
 
-        XCTAssertEqual(environment.stdoutLines, ["/tmp/control\\u{001B}name.aes"])
+        XCTAssertEqual(environment.stdoutLines, [output.path.replacingOccurrences(of: "\u{1B}", with: "\\u{001B}")])
+        XCTAssertFalse(environment.stdout.unicodeScalars.contains { $0.value == 0x1B })
     }
 
     func testInfoEscapesTerminalControlsInTheHint() throws {
@@ -283,7 +271,6 @@ final class ReportingTests: XCTestCase {
         environment.showsProgress = false
         XCTAssertFalse(Report.showsProgress(options, environment: environment))
         XCTAssertNil(Report.progressHandler(options, environment: environment))
-        XCTAssertNil(Report.directProgressHandler(options, environment: environment))
 
         environment.showsProgress = true
         XCTAssertTrue(Report.showsProgress(options, environment: environment))
@@ -335,6 +322,33 @@ final class ReportingTests: XCTestCase {
     }
 
     // MARK: - Helpers
+
+    /// Plan one real file so a report test has a planner-made item to show.
+    private func plannedItem(
+        mode: AESCryptBatchMode,
+        outputPath: URL? = nil
+    ) throws -> AESCryptBatchItem {
+        let directory = try makeDirectory()
+        addTeardownBlock { try? FileManager.default.removeItem(at: directory) }
+
+        let input = directory.appendingPathComponent(mode == .encrypt ? "in.txt" : "in.aes")
+        switch mode {
+        case .encrypt:
+            try Data("payload".utf8).write(to: input)
+        case .decrypt:
+            let seed = directory.appendingPathComponent("seed.txt")
+            try Data("payload".utf8).write(to: seed)
+            try AESCrypt.encrypt(url: seed, to: input, password: "pw", format: .v2)
+            try FileManager.default.removeItem(at: seed)
+        }
+
+        let output = outputPath ?? directory.appendingPathComponent("out")
+        let plan = AESCryptBatch.planSingle(input: input, output: output, mode: mode)
+        return try XCTUnwrap(
+            plan.runnableItems.first,
+            "the planner rejected the item: \(String(describing: plan.items.first?.issue))"
+        )
+    }
 
     private func makeDirectory() throws -> URL {
         let directory = FileManager.default.temporaryDirectory

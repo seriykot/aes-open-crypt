@@ -174,20 +174,6 @@ enum Report {
         }
     }
 
-    static func directProgressHandler(
-        _ options: Options,
-        environment: CLIEnvironment
-    ) -> AESCryptProgressHandler? {
-        guard showsProgress(options, environment: environment) else { return nil }
-        var lastPercent = -1
-        return { update in
-            let percent = Int(update.fraction * 100)
-            guard percent != lastPercent else { return }
-            lastPercent = percent
-            environment.writeProgress(percent)
-        }
-    }
-
     static func clearProgress(_ options: Options, environment: CLIEnvironment) {
         if showsProgress(options, environment: environment) {
             environment.clearProgress()

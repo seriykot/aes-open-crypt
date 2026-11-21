@@ -29,7 +29,11 @@ public struct AESCryptBatchItem: Sendable, Equatable {
     public let info: AESFileInfo?
     public let issue: AESCryptBatchIssue?
 
-    public init(
+    /// Items are made by the planner, which is the only thing that knows the
+    /// rules for an output name and an issue. Plans are still public to build
+    /// (`AESCryptBatchPlan.init(items:)`), so frontends can keep presenting
+    /// them; they just cannot invent an item that skipped planning.
+    init(
         input: URL,
         output: URL,
         mode: AESCryptBatchMode,
