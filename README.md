@@ -14,16 +14,16 @@ format 3 by default or format 2 for older AES Crypt versions. No telemetry or
 network access.
 
 <p align="center">
-  <a href="https://github.com/seriykot/aes-open-crypt/releases/tag/v0.2.0"><img src="https://img.shields.io/badge/release-v0.2.0-286b57" alt="Release 0.2.0"></a>
+  <a href="https://github.com/seriykot/aes-open-crypt/releases/tag/v0.3.0"><img src="https://img.shields.io/badge/release-v0.3.0-286b57" alt="Release 0.3.0"></a>
   <img src="https://img.shields.io/badge/macOS-13%2B-286b57?logo=apple&logoColor=white" alt="macOS 13 or later">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-286b57" alt="MIT License"></a>
 </p>
 
 ## 📦 Download
 
-- [Installer (.pkg)](https://github.com/seriykot/aes-open-crypt/releases/download/v0.2.0/AES.Open.Crypt.0.2.0.pkg)
-- [Portable app (.zip)](https://github.com/seriykot/aes-open-crypt/releases/download/v0.2.0/AES.Open.Crypt.0.2.0.zip)
-- [SHA-256 checksums](https://github.com/seriykot/aes-open-crypt/releases/download/v0.2.0/SHA256SUMS.txt)
+- [Installer (.pkg)](https://github.com/seriykot/aes-open-crypt/releases/download/v0.3.0/AES.Open.Crypt.0.3.0.pkg)
+- [Portable app (.zip)](https://github.com/seriykot/aes-open-crypt/releases/download/v0.3.0/AES.Open.Crypt.0.3.0.zip)
+- [SHA-256 checksums](https://github.com/seriykot/aes-open-crypt/releases/download/v0.3.0/SHA256SUMS.txt)
 
 Supports Apple silicon and Intel. The app and CLI are ad-hoc signed; the
 installer is unsigned. The release is not notarized, so Gatekeeper may warn

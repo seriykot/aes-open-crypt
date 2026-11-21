@@ -61,8 +61,8 @@ grep -q '600000' <<<"$HELP" || fail "help is missing the default iteration count
 ok "help lists commands, options, limits, exit codes, and JSON schema"
 
 VERSION="$("$BIN" --version)"
-[ "$VERSION" = "aesopen 0.2.0" ] || fail "--version printed '$VERSION'"
-ok "--version prints 0.2.0"
+[ "$VERSION" = "aesopen 0.3.0" ] || fail "--version printed '$VERSION'"
+ok "--version prints 0.3.0"
 
 # ------------------------------------------------------------- batch round trip
 
@@ -118,7 +118,7 @@ python3 -m json.tool <"$WORK/stdout" >/dev/null || fail "--json output is not va
 python3 - "$WORK/stdout" "$WORK/json/j.txt.aes" <<'PY' || fail "--json schema is wrong"
 import json, os, sys
 doc = json.load(open(sys.argv[1]))
-assert doc["version"] == "0.2.0", doc
+assert doc["version"] == "0.3.0", doc
 assert doc["command"] == "encrypt", doc
 assert len(doc["results"]) == 1, doc
 row = doc["results"][0]
@@ -237,7 +237,7 @@ run_expect 0 "$BIN" info --json "$WORK/round/a.txt.aes"
 python3 - "$WORK/stdout" <<'PY' || fail "info --json schema is wrong"
 import json, sys
 doc = json.load(open(sys.argv[1]))
-assert doc["version"] == "0.2.0", doc
+assert doc["version"] == "0.3.0", doc
 assert doc["command"] == "info", doc
 row = doc["results"][0]
 assert row["status"] == "ok", row
