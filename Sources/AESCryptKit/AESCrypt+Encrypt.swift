@@ -194,8 +194,15 @@ private func randomData(_ count: Int) throws -> Data {
 private func readUpTo(_ reader: ChunkReader, _ count: Int) throws -> Data {
     var result = Data()
     while result.count < count {
-        guard let chunk = try? reader.read(upToCount: count - result.count),
-              !chunk.isEmpty else {
+        let chunk: Data?
+        do {
+            chunk = try reader.read(upToCount: count - result.count)
+        } catch {
+            // A failed read is not end of file. Reporting it here keeps a
+            // short read from being encrypted as if it were the whole tail.
+            throw AESCryptError.io(error.localizedDescription)
+        }
+        guard let chunk, !chunk.isEmpty else {
             break
         }
         result.append(chunk)
