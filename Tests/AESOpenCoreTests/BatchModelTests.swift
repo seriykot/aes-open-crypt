@@ -549,6 +549,7 @@ final class BatchModelTests: XCTestCase {
         model.add(urls: [plain], preferredMode: nil)
         XCTAssertEqual(model.mode, .encrypt)
         XCTAssertEqual(model.rows.count, 1)
+        XCTAssertNil(model.notice)
         XCTAssertNil(model.passwordError)
     }
 
