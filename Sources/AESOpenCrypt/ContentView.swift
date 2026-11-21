@@ -291,7 +291,12 @@ struct ContentView: View {
 
                     Picker("Format", selection: $model.format) {
                         ForEach(AESOutputFormat.allCases, id: \.self) { format in
-                            Text(format == .v2 ? "Compatible (v2)" : "Strong (v3)").tag(format)
+                            switch format {
+                            case .v2:
+                                Text("Compatible (v2)").tag(format)
+                            case .v3:
+                                Text("Strong (v3)").tag(format)
+                            }
                         }
                     }
                     .pickerStyle(.segmented)

@@ -212,7 +212,7 @@ PY
 ok "--format 2 also produces a v2 file"
 
 run_expect 1 "$BIN" encrypt --password "$PW" --format v9 "$WORK/round/a.txt"
-grep -q 'unknown format' "$WORK/stderr" || fail "the unknown-format error message is missing"
+grep -qF "unknown format 'v9'" "$WORK/stderr" || fail "the unknown-format error message is missing or imprecise"
 ok "--format v9 exits 1 and reports an unknown format"
 
 # ---------------------------------------------------------------- password hint
