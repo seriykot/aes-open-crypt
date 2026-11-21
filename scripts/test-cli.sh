@@ -201,6 +201,20 @@ assert doc["results"][0]["format"] == "v2", doc
 PY
 ok "--format v2 still produces a v2 file"
 
+run_expect 0 "$BIN" encrypt --password "$PW" --format 2 \
+    -o "$WORK/round/numeric-v2.aes" "$WORK/round/a.txt"
+run_expect 0 "$BIN" info --json "$WORK/round/numeric-v2.aes"
+python3 - "$WORK/stdout" <<'PY' || fail "info --json did not report the numeric v2 format"
+import json, sys
+doc = json.load(open(sys.argv[1]))
+assert doc["results"][0]["format"] == "v2", doc
+PY
+ok "--format 2 also produces a v2 file"
+
+run_expect 1 "$BIN" encrypt --password "$PW" --format v9 "$WORK/round/a.txt"
+grep -q 'unknown format' "$WORK/stderr" || fail "the unknown-format error message is missing"
+ok "--format v9 exits 1 and reports an unknown format"
+
 # ---------------------------------------------------------------- password hint
 
 mkdir -p "$WORK/hint"

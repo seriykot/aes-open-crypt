@@ -201,15 +201,11 @@ private func parse(_ arguments: [String], into options: inout Options) throws {
         case "--password-file":
             options.passwordFile = try value(after: &index, in: arguments, name: argument)
         case "--format":
-            let raw = try value(after: &index, in: arguments, name: argument).lowercased()
-            switch raw {
-            case "v2", "2":
-                options.format = .v2
-            case "v3", "3":
-                options.format = .v3
-            default:
-                throw CLIError.usage("unknown format '\(raw)'")
+            let raw = try value(after: &index, in: arguments, name: argument)
+            guard let format = AESOutputFormat(cliText: raw) else {
+                throw CLIError.usage("unknown format '\(raw.lowercased())'")
             }
+            options.format = format
         case "--hint":
             options.hint = try value(after: &index, in: arguments, name: argument)
         case "--iterations":
