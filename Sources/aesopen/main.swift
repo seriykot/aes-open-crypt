@@ -2,7 +2,7 @@ import AESCryptKit
 import Darwin
 import Foundation
 
-private let toolVersion = "0.2.0"
+private let toolVersion = AESOpenVersion.current
 
 private let usageText = """
 aesopen - AES Crypt compatible encryption
@@ -61,7 +61,7 @@ Exit codes:
 
 JSON schema:
   {
-    "version": "0.2.0",
+    "version": "\(AESOpenVersion.current)",
     "command": "encrypt",
     "results": [
       {"input": "/abs/a.txt", "output": "/abs/a.txt.aes", "mode": "encrypt",

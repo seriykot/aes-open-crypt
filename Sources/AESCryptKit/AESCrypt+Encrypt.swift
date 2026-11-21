@@ -54,7 +54,7 @@ extension AESCrypt {
         }
 
         var header = Data([0x41, 0x45, 0x53, version.rawValue, 0x00])
-        let createdBy = Data("aes-open-crypt 0.2.0".utf8)
+        let createdBy = Data("aes-open-crypt \(AESOpenVersion.current)".utf8)
         header.append(try extensionBlock(identifier: "CREATED_BY", value: createdBy))
         if let hint = normalizedHint(hint) {
             header.append(

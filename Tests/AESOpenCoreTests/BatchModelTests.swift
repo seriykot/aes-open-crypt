@@ -19,7 +19,7 @@ final class BatchModelTests: XCTestCase {
 
         let model = BatchModel()
 
-        XCTAssertEqual(model.format, .v3)
+        XCTAssertEqual(model.format, AESOutputFormat.v3)
     }
 
     func testFormatUsesSavedV2Preference() {
@@ -32,11 +32,31 @@ final class BatchModelTests: XCTestCase {
                 defaults.removeObject(forKey: "outputFormat")
             }
         }
-        defaults.set(AESFormatVersion.v2.rawValue, forKey: "outputFormat")
+        defaults.set(AESOutputFormat.v2.rawValue, forKey: "outputFormat")
 
         let model = BatchModel()
 
-        XCTAssertEqual(model.format, .v2)
+        XCTAssertEqual(model.format, AESOutputFormat.v2)
+    }
+
+    func testFormatFallsBackToV3ForAnyOtherSavedValue() {
+        let defaults = UserDefaults.standard
+        let previous = defaults.object(forKey: "outputFormat")
+        defer {
+            if let previous {
+                defaults.set(previous, forKey: "outputFormat")
+            } else {
+                defaults.removeObject(forKey: "outputFormat")
+            }
+        }
+
+        for saved in [0, 1, 4, 9] {
+            defaults.set(saved, forKey: "outputFormat")
+
+            let model = BatchModel()
+
+            XCTAssertEqual(model.format, AESOutputFormat.v3, "saved value \(saved)")
+        }
     }
 
     func testWeakPasswordHintPolicy() {
